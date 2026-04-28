@@ -2,7 +2,7 @@
   "name": "Hero Quest: Gear Master",
   "short_name": "HeroQuest",
   "description": "Um RPG de Arena e Equipamento",
-  "start_url": "index.html",
+  "start_url": "jogo.html",
   "display": "standalone",
   "background_color": "#1a1a1a",
   "theme_color": "#00ffcc",
