@@ -54,7 +54,7 @@
     <div id="class-selection">
         <h2 style="color: var(--accent);">Escolhe a tua Classe</h2>
         <div class="class-card" onclick="initClass('Guerreiro')">🛡️ Guerreiro (Dano: Força | HP Alto)</div>
-        <div class="class-card" onclick="initClass('Arqueiro')">🏹 Arqueiro (Dano: Destreza | Gold Bonus)</div>
+        <div class="class-card" onclick="initClass('Assassino')">🗡️ Assassino (Dano: Destreza | Gold Bonus)</div>
         <div class="class-card" onclick="initClass('Mago')">✨ Mago (Dano: Inteligência | XP Bonus)</div>
     </div>
 
@@ -134,8 +134,18 @@
         shopItems: [], currentQuests: []
     };
 
-    const missionNames = ["Caçar Ratos", "Limpar Esgotos", "Escolta Real", "Colher Ervas", "Roubar Plano", "Matar Ogro", "Pescar Lixo", "Treinar Tropas", "Explorar Mina"];
+    const missionNames = ["Caçar Ratos", "Limpar Esgotos", "Escolta Real", "Colher Ervas", "Roubar os Planos", "Matar Slimes", "Pescar", "Treinar Tropas", "Explorar Mina"];
     const itemNames = { weapon: ["Espada", "Adaga", "Cajado"], armor: ["Túnica", "Couro", "Placas"], amulet: ["Anel", "Colar"] };
+
+    // Configuração de Raridades
+    const RARITIES = {
+        COMUM:     { name: "Comum", color: "#ffffff", chance: 0.60, slots: 1 },
+        INCOMUM:   { name: "Incomum", color: "#1eff00", chance: 0.20, slots: 2 }, // 1 a 2 bónus
+        RARO:      { name: "Raro", color: "#0070dd", chance: 0.10, slots: 2 },
+        EPICO:     { name: "Épico", color: "#a335ee", chance: 0.06, slots: 3 }, // 2 a 3 bónus
+        LENDARIO:  { name: "Lendário", color: "#ff8000", chance: 0.03, slots: 3 },
+        MITICO:    { name: "Mítico", color: "#ff0000", chance: 0.01, slots: 5 }
+    };
 
     function save() { localStorage.setItem('heroQuestFinalSave', JSON.stringify(p)); }
 
@@ -153,7 +163,7 @@
     function initClass(className) {
         p.class = className;
         if (className === 'Guerreiro') { p.maxHp = 150; p.str = 15; }
-        else if (className === 'Arqueiro') { p.maxHp = 100; p.dex = 15; }
+        else if (className === 'Assassino') { p.maxHp = 100; p.dex = 15; }
         else if (className === 'Mago') { p.maxHp = 70; p.int = 20; }
         p.hp = p.maxHp;
         document.getElementById('class-selection').style.display = 'none';
@@ -182,14 +192,73 @@
     }
 
     function createItem(quality = 1) {
+        // 1. Sortear Raridade baseada nas chances
+        let rand = Math.random();
+        let rarityKey = "COMUM";
+        let cumulative = 0;
+        
+        for (let key in RARITIES) {
+            cumulative += RARITIES[key].chance;
+            if (rand <= cumulative) {
+                rarityKey = key;
+                break;
+            }
+        }
+        const rarity = RARITIES[rarityKey];
+
+        // 2. Sortear Tipo e Nome
         const types = ['weapon', 'armor', 'amulet'];
         const t = types[Math.floor(Math.random() * types.length)];
-        const bonusType = t === 'weapon' ? (p.class === 'Guerreiro' ? 'str' : p.class === 'Arqueiro' ? 'dex' : 'int') : (t === 'armor' ? 'vit' : 'luk');
-        return { 
-            id: Date.now() + Math.random(), 
-            name: itemNames[t][Math.floor(Math.random() * itemNames[t].length)], 
-            type: t, bonusType, bonusVal: Math.floor(quality * (Math.random() * 5 + 2)), price: quality * 50 
+        const baseName = itemNames[t][Math.floor(Math.random() * itemNames[t].length)];
+        
+        // 3. Gerar Bónus (Atributos)
+        let bonuses = {};
+        let mainAttr = p.class === 'Guerreiro' ? 'str' : (p.class === 'Assassino' ? 'dex' : 'int');
+        
+        // Lógica de Atribuição baseada na tua regra:
+        if (rarityKey === "COMUM") {
+            bonuses[mainAttr] = genValue(quality);
+        } 
+        else if (rarityKey === "INCOMUM") {
+            bonuses[mainAttr] = genValue(quality);
+            if (Math.random() > 0.5) bonuses['vit'] = genValue(quality, 20); // 50% chance de 2º bónus
+        }
+        else if (rarityKey === "RARO") {
+            bonuses[mainAttr] = genValue(quality);
+            bonuses['vit'] = genValue(quality, 20);
+        }
+        else if (rarityKey === "EPICO") {
+            bonuses[mainAttr] = genValue(quality);
+            bonuses['vit'] = genValue(quality, 20);
+            if (Math.random() > 0.5) bonuses['luk'] = genValue(quality, 1, 3);
+        }
+        else if (rarityKey === "LENDARIO") {
+            bonuses[mainAttr] = genValue(quality);
+            bonuses['vit'] = genValue(quality, 20);
+            bonuses['luk'] = genValue(quality, 1, 3);
+        }
+        else if (rarityKey === "MITICO") {
+            // Todos os 5 atributos
+            ['str', 'vit', 'dex', 'int', 'luk'].forEach(attr => {
+                let mult = (attr === 'vit') ? 20 : (attr === 'luk' ? 1 : 1);
+                bonuses[attr] = genValue(quality, mult);
+            });
+        }
+
+        return {
+            id: Date.now() + Math.random(),
+            name: baseName,
+            rarityName: rarity.name,
+            rarityColor: rarity.color,
+            type: t,
+            bonuses: bonuses, // Objeto com múltiplos atributos
+            price: quality * (rarity.slots * 50)
         };
+    }
+
+    // Função auxiliar para gerar valores equilibrados
+    function genValue(q, multiplier = 1, min = 2) {
+        return Math.floor((Math.random() * 5 + min) * q * multiplier * 0.5) + 1;
     }
 
     function startQuest(idx) {
@@ -231,7 +300,12 @@
 
     function getTotalAttr(type) {
         let base = (type === 'vit') ? p.maxHp : (p[type] || 0);
-        Object.values(p.equip).forEach(item => { if (item && item.bonusType === type) base += item.bonusVal; });
+        
+        Object.values(p.equip).forEach(item => {
+            if (item && item.bonuses && item.bonuses[type]) {
+                base += item.bonuses[type];
+            }
+        });
         return base;
     }
 
@@ -250,7 +324,7 @@
         document.getElementById('hp-max').innerText = getTotalAttr('vit');
         document.getElementById('arena-rank').innerText = p.arenaRank;
         
-        let dmgA = p.class === 'Guerreiro' ? 'str' : p.class === 'Arqueiro' ? 'dex' : 'int';
+        let dmgA = p.class === 'Guerreiro' ? 'str' : p.class === 'Assassino' ? 'dex' : 'int';
         document.getElementById('player-dmg-val').innerText = getTotalAttr(dmgA);
 
         // Render Quests
@@ -260,61 +334,62 @@
             const div = document.createElement('div');
             div.className = 'quest-card';
             div.innerHTML = `<span class="tag ${tClass}">${q.type}</span><br><b>${q.name}</b><br>
-                             <small>${q.gold} G | ${q.xp} XP</small><button class="q-btn" onclick="startQuest(${i})">Ir</button>`;
+                            <small>${q.gold} G | ${q.xp} XP</small><button class="q-btn" onclick="startQuest(${i})">Ir</button>`;
             qB.appendChild(div);
         });
 
-        // Gear & Inv
-        document.getElementById('name-weapon').innerText = p.equip.weapon ? p.equip.weapon.name + " (+" + p.equip.weapon.bonusVal + ")" : "Vazio";
-        document.getElementById('name-armor').innerText = p.equip.armor ? p.equip.armor.name + " (+" + p.equip.armor.bonusVal + ")" : "Vazio";
-        document.getElementById('name-amulet').innerText = p.equip.amulet ? p.equip.amulet.name + " (+" + p.equip.amulet.bonusVal + ")" : "Vazio";
+        // Equipamento Atual (Slots)
+        ['weapon', 'armor', 'amulet'].forEach(slot => {
+            const item = p.equip[slot];
+            const el = document.getElementById('name-' + slot);
+            if (item) {
+                let bTxt = "";
+                for (let b in item.bonuses) bTxt += `+${item.bonuses[b]}${b.toUpperCase()} `;
+                el.innerHTML = `<span style="color:${item.rarityColor}">${item.name}</span><br><small>${bTxt}</small>`;
+            } else {
+                el.innerText = "Vazio";
+            }
+        });
 
-        // Substitui o trecho dos atributos por este:
+        // Atributos
         const attrList = document.getElementById('attr-list'); 
         attrList.innerHTML = '';
-
-        // Criamos um mapa para traduzir as siglas e definir quais levam o símbolo '%'
-        const attrNames = {
-            str: { nome: "Força", sufixo: "" },
-            vit: { nome: "Vida", sufixo: "" },
-            dex: { nome: "Destreza", sufixo: "%" },
-            int: { nome: "Inteligência", sufixo: "%" },
-            luk: { nome: "Sorte", sufixo: "%" }
-        };
-
-        // Adiciona o indicador de dano principal no topo
-        const mainStatInfo = p.class === 'Guerreiro' ? 'Força' : p.class === 'Arqueiro' ? 'Destreza' : 'Inteligência';
+        const attrNames = { str: "Força", vit: "Vida", dex: "Destreza", int: "Inteligência", luk: "Sorte" };
+        
+        const mainStatInfo = p.class === 'Guerreiro' ? 'Força' : p.class === 'Assassino' ? 'Destreza' : 'Inteligência';
         attrList.innerHTML = `<p style="font-size: 0.8em; color: #aaa; margin-bottom: 10px;">Dano principal: <b style="color: white;">${mainStatInfo}</b></p>`;
 
         ['str', 'vit', 'dex', 'int', 'luk'].forEach(a => {
             const row = document.createElement('div');
-            // Usamos a classe 'attr-row' que já tinhas no CSS
             row.className = "attr-row"; 
             row.style = "display:flex; justify-content:space-between; align-items:center; margin-bottom:8px; background:#444; padding:8px 10px; border-radius:4px;";
-            
-            const info = attrNames[a];
-            const valor = getTotalAttr(a);
-
-            row.innerHTML = `
-                <span>${info.nome}: <b>${valor}</b>${info.sufixo}</span>
-                <button class="plus-btn" onclick="addAttr('${a}')" style="width:28px; height:28px; background:#4caf50; color:white; border:none; cursor:pointer; border-radius:50%; font-weight:bold;">+</button>
-            `;
+            row.innerHTML = `<span>${attrNames[a]}: <b>${getTotalAttr(a)}</b>${(a!=='str'&&a!=='vit')?'%':''}</span>
+                            <button class="plus-btn" onclick="addAttr('${a}')" style="width:28px; height:28px; background:#4caf50; color:white; border:none; cursor:pointer; border-radius:50%; font-weight:bold;">+</button>`;
             attrList.appendChild(row);
         });
-        
 
+        // Inventário
         const invL = document.getElementById('inventory-list'); invL.innerHTML = '';
         for(let i=0; i<12; i++) {
             const s = document.createElement('div'); s.className = 'slot';
-            if (p.inv[i]) { s.innerHTML = `<b>${p.inv[i].name}</b><br>${p.inv[i].bonusVal ? '+'+p.inv[i].bonusVal : ''}`; s.onclick = () => showActions(p.inv[i], i); }
-            else { s.innerText = "Vazio"; }
+            const item = p.inv[i];
+            if (item) { 
+                let bTxt = "";
+                if(item.bonuses) for(let b in item.bonuses) bTxt += `+${item.bonuses[b]} `;
+                s.innerHTML = `<b style="color:${item.rarityColor || '#fff'}">${item.name}</b><br><small>${bTxt}</small>`; 
+                s.onclick = () => showActions(item, i); 
+            } else { s.innerText = "Vazio"; }
             invL.appendChild(s);
         }
 
+        // Loja
         const sD = document.getElementById('shop-items'); sD.innerHTML = '<h4>Mercado</h4>';
         p.shopItems.forEach((item, i) => {
+            let bTxt = "";
+            for(let b in item.bonuses) bTxt += `+${item.bonuses[b]}${b.toUpperCase()} `;
             const div = document.createElement('div'); div.className = 'item-card';
-            div.innerHTML = `<b>${item.name}</b> (+${item.bonusVal} ${item.bonusType})<button onclick="buyItem(${i})">Comprar (${item.price} G)</button>`;
+            div.innerHTML = `<b style="color:${item.rarityColor}">${item.name}</b> (${item.rarityName})<br><small>${bTxt}</small>
+                            <button onclick="buyItem(${i})">Comprar (${item.price} G)</button>`;
             sD.appendChild(div);
         });
         save();
@@ -341,7 +416,7 @@
     
     function fightArena() {
         let bHp = p.arenaRank * 70, bDmg = p.arenaRank * 12;
-        let pDmg = getTotalAttr(p.class === 'Guerreiro' ? 'str' : p.class === 'Arqueiro' ? 'dex' : 'int');
+        let pDmg = getTotalAttr(p.class === 'Guerreiro' ? 'str' : p.class === 'Assassino' ? 'dex' : 'int');
         while (p.hp > 0 && bHp > 0) { bHp -= pDmg; if (bHp > 0) p.hp -= bDmg; }
         if (bHp <= 0) { log("VITÓRIA!"); p.gold += p.arenaRank * 100; p.xp += p.arenaRank * 50; p.arenaRank++; checkLvl(); } 
         else { p.hp = 1; log("DERROTA!"); }
