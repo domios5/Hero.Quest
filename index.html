@@ -262,6 +262,14 @@
     }
 
     function startQuest(idx) {
+   
+        // NOVA VERIFICAÇÃO DE VIDA
+        if (p.hp <= 1) {
+            log("Estás demasiado ferido para ir numa missão! Compra uma poção.", "var(--btn-red)");
+            alert("Precisas de recuperar vida antes de continuar!");
+            return; // Sai da função e não inicia a missão
+        }
+
         const q = p.currentQuests[idx];
         const bar = document.getElementById('progress-bar');
         const container = document.getElementById('progress-container');
@@ -281,11 +289,21 @@
     }
 
     function completeQuest(q) {
+        // 1. Cálculo de bónus de Ouro e XP
         let fG = Math.floor(q.gold * (1 + getTotalAttr('dex')/100));
         let fX = Math.floor(q.xp * (1 + getTotalAttr('int')/100));
         p.gold += fG; p.xp += fX;
-        log(`Missão feita: +${fG} Ouro, +${fX} XP.`);
+
+        // 2. ADICIONAR PERDA DE VIDA (1 a 10)
+        let damageTaken = Math.floor(Math.random() * 10) + 1;
+        p.hp -= damageTaken;
         
+        // Garantir que o HP não fica negativo ou abaixo de 1 (para não morrer em missões)
+        if (p.hp < 1) p.hp = 1; 
+
+        log(`Missão feita: +${fG} Ouro, +${fX} XP. Perbeste ${damageTaken} HP.`);
+
+        // 3. Sistema de Loot (restante código que já tens)
         if (Math.random() < 0.15) {
             const item = createItem(p.lvl);
             p.inv.push(item);
@@ -327,17 +345,37 @@
         let dmgA = p.class === 'Guerreiro' ? 'str' : p.class === 'Assassino' ? 'dex' : 'int';
         document.getElementById('player-dmg-val').innerText = getTotalAttr(dmgA);
 
-        // Render Quests
-        const qB = document.getElementById('quest-board'); qB.innerHTML = '';
+        const hpEl = document.getElementById('hp-cur');
+        hpEl.innerText = Math.floor(p.hp);
+        hpEl.style.color = p.hp <= 1 ? "var(--btn-red)" : "white"; // Fica vermelho se estiver a 1
+
+
+        // Render Quests corrigido dentro da função updateUI
+        const qB = document.getElementById('quest-board'); 
+        qB.innerHTML = '';
+
         p.currentQuests.forEach((q, i) => {
+            const isLowHP = p.hp <= 1; // Verifica se a vida está no limite
             const tClass = q.type === 'gold' ? 'tag-gold' : q.type === 'xp' ? 'tag-xp' : 'tag-bal';
+            
+            // Configuração do botão baseada no HP
+            const btnStyle = isLowHP ? 'style="background:#555; cursor:not-allowed;"' : '';
+            const btnText = isLowHP ? 'Ferido!' : 'Ir';
+
             const div = document.createElement('div');
             div.className = 'quest-card';
-            div.innerHTML = `<span class="tag ${tClass}">${q.type}</span><br><b>${q.name}</b><br>
-                            <small>${q.gold} G | ${q.xp} XP</small><button class="q-btn" onclick="startQuest(${i})">Ir</button>`;
+            div.innerHTML = `
+                <span class="tag ${tClass}">${q.type}</span><br>
+                <b>${q.name}</b><br>
+                <small>${q.gold} G | ${q.xp} XP</small>
+                <button class="q-btn" onclick="startQuest(${i})" ${btnStyle}>
+                    ${btnText}
+                </button>`;
+            
             qB.appendChild(div);
         });
 
+        
         // Equipamento Atual (Slots)
         ['weapon', 'armor', 'amulet'].forEach(slot => {
             const item = p.equip[slot];
@@ -363,9 +401,8 @@
             const row = document.createElement('div');
             row.className = "attr-row"; 
             row.style = "display:flex; justify-content:space-between; align-items:center; margin-bottom:8px; background:#444; padding:8px 10px; border-radius:4px;";
-            row.innerHTML = `<span>${attrNames[a]}: <b>${getTotalAttr(a)}</b>${(a!=='str'&&a!=='vit')?'%':''}</span>
-                            <button class="plus-btn" onclick="addAttr('${a}')" style="width:28px; height:28px; background:#4caf50; color:white; border:none; cursor:pointer; border-radius:50%; font-weight:bold;">+</button>`;
-            attrList.appendChild(row);
+            row.innerHTML = `<span>${attrNames[a]}: <b>${getTotalAttr(a)}</b></span>
+                 <button class="plus-btn" onclick="addAttr('${a}')" style="width:28px; height:28px; background:#4caf50; color:white; border:none; cursor:pointer; border-radius:50%; font-weight:bold;">+</button>`;            attrList.appendChild(row);
         });
 
         // Inventário
