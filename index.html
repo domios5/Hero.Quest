@@ -119,6 +119,15 @@
             <p>Dano Total: <span id="player-dmg-val" class="highlight">0</span></p>
             <button onclick="fightArena()" style="background: var(--btn-red);">Lutar</button>
         </div>
+        <div id="boss-area" style="margin-top: 20px; border: 2px solid var(--gold); padding: 10px; display: none;">
+            <h3 style="color: var(--gold);">WORLD BOSS</h3>
+            <div style="background: #444; width: 100%; height: 20px; border-radius: 10px; overflow: hidden;">
+                <div id="boss-hp-bar" style="background: #ff4444; height: 100%; width: 100%; transition: width 0.3s;"></div>
+            </div>
+            <p>HP: <span id="boss-hp-val">0</span> / <span id="boss-hp-max">0</span></p>
+            <p>Tentativas: <span id="boss-attempts">5</span>/5</p>
+            <button onclick="attackBoss()" id="btn-attack-boss" style="background: var(--gold); color: black;">ATACAR BOSS</button>
+        </div>
     </div>
 
     <div id="progress-container"><div id="progress-bar"></div></div>
@@ -131,7 +140,14 @@
         class: null, lvl: 1, gold: 50, xp: 0, nextLvl: 100, points: 0,
         hp: 100, maxHp: 100, str: 5, dex: 5, int: 5, luk: 1, arenaRank: 1,
         inv: [], equip: { weapon: null, armor: null, amulet: null },
-        shopItems: [], currentQuests: []
+        shopItems: [], currentQuests: [],
+        boss: {
+        hp: 0,
+        maxHp: 0,
+        attempts: 5,
+        nextSpawn: 0, // Timestamp para daqui a 3 dias
+        active: false
+    }
     };
 
     const missionNames = ["Caçar Ratos", "Limpar Esgotos", "Escolta Real", "Colher Ervas", "Roubar os Planos", "Matar Slimes", "Pescar", "Treinar Tropas", "Explorar Mina"];
@@ -327,6 +343,71 @@
         return base;
     }
 
+    function checkBossSpawn() {
+        const agora = Date.now();
+        if (!p.boss.active && agora >= p.boss.nextSpawn) {
+            // Criar novo Boss baseado no nível do jogador
+            p.boss.maxHp = p.lvl * 1000; 
+            p.boss.hp = p.boss.maxHp;
+            p.boss.attempts = 5;
+            p.boss.active = true;
+            log("UM BOSS MÍTICO APARECEU!", "var(--gold)");
+        }
+    }
+
+    function attackBoss() {
+        // 1. Verificações básicas
+        if (!p.boss.active || p.boss.attempts <= 0) return;
+        if (p.hp <= 1) {
+            log("Estás demasiado fraco para enfrentar o Boss! Cura-te primeiro.", "var(--btn-red)");
+            return;
+        }
+
+        // 2. Calcular Dano do Jogador
+        let dmgAttr = p.class === 'Guerreiro' ? 'str' : p.class === 'Assassino' ? 'dex' : 'int';
+        let playerDamage = getTotalAttr(dmgAttr) * 5; 
+
+        // 3. Calcular Dano do Boss (O contra-ataque)
+        // O Boss tira, por exemplo, 15% da vida máxima do jogador por ataque
+        let bossDamage = Math.floor(getTotalAttr('vit') * 0.35); 
+        
+        // Aplicar danos
+        p.boss.hp -= playerDamage;
+        p.hp -= bossDamage;
+        p.boss.attempts--;
+
+        log(`Ataque feroz! Causaste ${playerDamage} de dano.`, "var(--accent)");
+        log(`O Boss contra-atacou! Perdeste ${bossDamage} de HP.`, "var(--btn-red)");
+
+        // 4. Verificação de Morte do Jogador
+        if (p.hp <= 0) {
+            p.hp = 1; // Deixa com 1 de HP para não quebrar o jogo
+            log("Foste nocauteado pelo Boss! Recupera as tuas forças.", "var(--btn-red)");
+        }
+
+        // 5. Verificação de Vitória (Se o Boss morreu)
+        if (p.boss.hp <= 0) {
+            p.boss.hp = 0;
+            p.boss.active = false;
+            p.boss.nextSpawn = Date.now() + (3 * 24 * 60 * 60 * 1000); // 3 dias
+            
+            // Recompensas
+            p.gold += p.lvl * 500;
+            p.xp += p.lvl * 1000;
+            
+            // Gera o item Mítico (Raridade fixa)
+            const itemMitico = createItem(p.lvl); 
+            itemMitico.rarityName = "Mítico";
+            itemMitico.rarityColor = "#ff0000";
+            p.inv.push(itemMitico);
+            
+            log("VITÓRIA LENDÁRIA! O Boss caiu e deixou um rasto de ouro e um item Mítico!", "var(--gold)");
+            checkLvl();
+        }
+
+        updateUI(); // Atualiza as barras de vida e textos
+    }
+
     function refreshShop() { p.shopItems = [createItem(p.lvl), createItem(p.lvl)]; }
 
     function buyPotion() { if (p.gold >= 20) { p.gold -= 20; p.inv.push({name: "Poção", type: 'consumable'}); updateUI(); } }
@@ -375,7 +456,7 @@
             qB.appendChild(div);
         });
 
-        
+
         // Equipamento Atual (Slots)
         ['weapon', 'armor', 'amulet'].forEach(slot => {
             const item = p.equip[slot];
@@ -417,6 +498,23 @@
                 s.onclick = () => showActions(item, i); 
             } else { s.innerText = "Vazio"; }
             invL.appendChild(s);
+        }
+
+        checkBossSpawn(); // Verifica se o boss deve nascer
+
+        const bossArea = document.getElementById('boss-area');
+        if (p.boss.active) {
+            bossArea.style.display = 'block';
+            document.getElementById('boss-hp-val').innerText = p.boss.hp;
+            document.getElementById('boss-hp-max').innerText = p.boss.maxHp;
+            document.getElementById('boss-attempts').innerText = p.boss.attempts;
+            
+            let perc = (p.boss.hp / p.boss.maxHp) * 100;
+            document.getElementById('boss-hp-bar').style.width = perc + "%";
+            
+            document.getElementById('btn-attack-boss').disabled = (p.boss.attempts <= 0);
+        } else {
+            bossArea.style.display = 'none';
         }
 
         // Loja
