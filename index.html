@@ -7,15 +7,15 @@
         :root { --main-bg: #1a1a1a; --card-bg: #2c2c2c; --accent: #00ffcc; --btn-blue: #008cba; --btn-red: #a32a2a; --gold: #ffcc00; }
         body { background-color: var(--main-bg); color: white; font-family: 'Segoe UI', sans-serif; display: flex; justify-content: center; padding: 10px; }
         #game-container { width: 600px; background: var(--card-bg); padding: 20px; border-radius: 10px; border: 2px solid #444; position: relative; box-shadow: 0 0 20px rgba(0,0,0,0.5); }
-        
+
         #class-selection { position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.95); z-index: 100; display: flex; flex-direction: column; align-items: center; justify-content: center; border-radius: 10px; text-align: center; padding: 20px; box-sizing: border-box; }
         .class-card { background: #333; border: 1px solid #555; padding: 15px; margin: 10px; border-radius: 8px; width: 80%; cursor: pointer; }
 
-        .stats-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; background: #333; padding: 15px; border-radius: 5px; margin-bottom: 15px; border-left: 5px solid var(--accent); }
+        .stats-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; background: #333; padding: 15px; border-radius: 5px; margin-bottom: 10px; border-left: 5px solid var(--accent); }
         .tabs { display: flex; gap: 5px; margin-bottom: 15px; flex-wrap: wrap; }
         .tab-btn { flex: 1; padding: 8px; background: #444; border: none; color: white; cursor: pointer; border-radius: 5px; font-size: 0.85em; }
         .tab-btn.active { background: var(--btn-blue); font-weight: bold; }
-        
+
         .tab-content { display: none; background: #333; padding: 15px; border-radius: 5px; min-height: 400px; }
         .tab-content.active { display: block; }
 
@@ -27,21 +27,35 @@
         .tag-bal { background: #34495e; color: white; }
 
         .item-card { background: #3d3d3d; border: 1px solid #555; padding: 12px; border-radius: 8px; margin-bottom: 10px; }
-        
+
         .inv-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
         .slot { background: #222; border: 1px solid #555; height: 70px; border-radius: 5px; display: flex; flex-direction: column; align-items: center; justify-content: center; font-size: 0.7em; cursor: pointer; padding: 2px; text-align: center; }
         .slot:hover { border-color: var(--accent); }
-        
-        .equip-area { display: flex; justify-content: space-around; margin-bottom: 20px; background: #222; padding: 10px; border-radius: 10px; }
+
+        .equip-area { display: flex; flex-wrap: wrap; justify-content: space-around; margin-bottom: 20px; background: #222; padding: 10px; border-radius: 10px; gap: 8px; }
+        .equip-area .slot { width: 28%; }
 
         button { background: var(--btn-blue); color: white; border: none; padding: 8px; cursor: pointer; border-radius: 3px; font-weight: bold; width: 100%; margin-top: 5px; }
-        button:disabled { background: #555 !important; opacity: 0.6; }
-        
+        button:disabled { background: #555 !important; opacity: 0.6; cursor: not-allowed; }
+
         #progress-container { width: 100%; background: #444; height: 12px; border-radius: 10px; margin: 15px 0; display: none; overflow: hidden; }
         #progress-bar { width: 0%; height: 100%; background: #4caf50; }
 
         .log { font-size: 0.8em; color: #ccc; margin-top: 15px; height: 70px; overflow-y: auto; background: #111; padding: 10px; border-radius: 5px; }
         .highlight { color: var(--gold); font-weight: bold; }
+
+        /* Barra de HP colorida */
+        .hp-bar-outer { width: 100%; height: 14px; background: #444; border-radius: 10px; overflow: hidden; margin-bottom: 15px; }
+        .hp-bar-inner { height: 100%; width: 0%; background: #4caf50; transition: width 0.3s ease, background 0.3s ease; }
+
+        /* Flash de dano */
+        @keyframes dmgFlash {
+            0% { box-shadow: 0 0 0 3px #ff4444; }
+            100% { box-shadow: 0 0 0 0px transparent; }
+        }
+        .flash-dmg { animation: dmgFlash 0.4s ease-out; }
+
+        select { padding: 6px; border-radius: 4px; background: #222; color: white; border: 1px solid #555; }
     </style>
 
     <link rel="manifest" href="manifest.json">
@@ -63,13 +77,15 @@
         <h2 style="color: var(--accent); margin: 0;">Hero Quest: Gear Master</h2>
         <small><span id="display-class">...</span> Nível <span id="lvl">1</span></small>
     </div>
-    
+
     <div class="stats-grid">
         <div>Ouro: <span id="gold" class="highlight">0</span></div>
         <div>HP: <span id="hp-cur">0</span>/<span id="hp-max">0</span></div>
         <div>XP: <span id="xp">0</span>/<span id="nextLvl">0</span></div>
         <div>Pontos: <span id="points" style="color: var(--gold);">0</span></div>
     </div>
+
+    <div class="hp-bar-outer"><div class="hp-bar-inner" id="hp-bar-inner"></div></div>
 
     <div class="tabs">
         <button class="tab-btn active" onclick="openTab('quests', event)">Taberna</button>
@@ -88,28 +104,53 @@
         <div class="equip-area">
             <div class="slot" id="slot-weapon" onclick="unequip('weapon')">Arma<br><small id="name-weapon">Vazio</small></div>
             <div class="slot" id="slot-armor" onclick="unequip('armor')">Armadura<br><small id="name-armor">Vazio</small></div>
-            <div class="slot" id="slot-amulet" onclick="unequip('amulet')">Amuleto<br><small id="name-amulet">Vazio</small></div>
+            <div class="slot" id="slot-amulet" onclick="unequip('amulet')">Colar<br><small id="name-amulet">Vazio</small></div>
+            <div class="slot" id="slot-ring" onclick="unequip('ring')">Anel<br><small id="name-ring">Vazio</small></div>
+            <div class="slot" id="slot-boots" onclick="unequip('boots')">Botas<br><small id="name-boots">Vazio</small></div>
+            <div class="slot" id="slot-cape" onclick="unequip('cape')">Capa<br><small id="name-cape">Vazio</small></div>
         </div>
+
+        <h4>Habilidade</h4>
+        <div id="ability-box" style="background:#292929; padding:10px; border-radius:5px; margin-bottom:15px;">
+            <div id="ability-desc" style="font-size:0.8em; color:#ccc; margin-bottom:8px;"></div>
+            <button id="btn-ability" onclick="useAbility()" style="background:#9b59b6;">Usar Habilidade</button>
+        </div>
+
         <h4>Atributos</h4>
         <div id="attr-list"></div>
+
+        <div id="prestige-box" style="margin-top:15px; background:#3d2b00; border:1px solid var(--gold); padding:10px; border-radius:5px; text-align:center;">
+            <p style="font-size:0.8em; margin:0 0 8px 0;">Prestígio atual: <b id="prestige-lvl">0</b> (+<span id="prestige-bonus">0</span>% Ouro/XP permanente)</p>
+            <button id="btn-prestige" onclick="doPrestige()" style="background:var(--gold); color:black;">Fazer Prestígio</button>
+        </div>
     </div>
 
     <div id="inv" class="tab-content">
+        <div style="margin-bottom:10px; display:flex; gap:8px; align-items:center;">
+            <label style="font-size:0.8em; white-space:nowrap;">Ordenar:</label>
+            <select id="inv-sort" onchange="setInvSort(this.value)" style="flex:1;">
+                <option value="none">Padrão</option>
+                <option value="rarity">Raridade</option>
+                <option value="type">Tipo</option>
+            </select>
+        </div>
         <div class="inv-grid" id="inventory-list"></div>
         <div id="item-actions" style="margin-top:15px; display:none; background:#444; padding:10px; border-radius:5px;">
             <div id="action-info"></div>
             <div style="display:flex; gap:5px; margin-top:5px;">
                 <button id="btn-equip-use" style="background:#4caf50">Ação</button>
+                <button id="btn-enchant" style="background:#8e44ad">Encantar</button>
                 <button id="btn-sell" style="background:#e67e22">Vender</button>
             </div>
         </div>
     </div>
 
     <div id="shop" class="tab-content">
-        <div class="item-card">
-            <strong>🧪 Poção de Vida</strong> (20 Ouro)
-            <button onclick="buyPotion()">Comprar</button>
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px; gap:8px;">
+            <small id="shop-refresh-timer" style="color:#aaa;"></small>
+            <button onclick="manualRefreshShop()" style="width:auto; padding:5px 10px; background:#555;">Atualizar Loja (10 Ouro)</button>
         </div>
+        <div id="potion-list"></div>
         <hr>
         <div id="shop-items"></div>
     </div>
@@ -133,26 +174,59 @@
 
     <div id="progress-container"><div id="progress-bar"></div></div>
     <div class="log" id="game-log"></div>
-    <button onclick="resetGame()" style="margin-top: 10px; background: #333; font-size: 0.7em; width: auto; padding: 5px 10px;">Reset</button>
+    <div style="display:flex; gap:5px; margin-top:10px;">
+        <button onclick="resetGame()" style="background: #333; font-size: 0.7em; width: auto; padding: 5px 10px;">Reset</button>
+        <button onclick="exportSave()" style="background: #333; font-size: 0.7em; width: auto; padding: 5px 10px;">Exportar Save</button>
+        <button onclick="document.getElementById('import-file-input').click()" style="background: #333; font-size: 0.7em; width: auto; padding: 5px 10px;">Importar Save</button>
+        <input type="file" id="import-file-input" accept="application/json" style="display:none" onchange="importSaveFile(this)">
+    </div>
 </div>
 
 <script>
+    const CURRENT_SAVE_VERSION = 2;
+    const INV_CAPACITY = 12;
+    const SHOP_REFRESH_INTERVAL = 5 * 60 * 1000; // 5 minutos
+    const PRESTIGE_LEVEL_REQ = 10;
+
     let p = {
+        saveVersion: CURRENT_SAVE_VERSION,
         class: null, lvl: 1, gold: 50, xp: 0, nextLvl: 100, points: 0,
         hp: 100, maxHp: 100, str: 5, dex: 5, int: 5, luk: 1, arenaRank: 1,
-        inv: [], equip: { weapon: null, armor: null, amulet: null },
-        shopItems: [], currentQuests: [],
+        inv: [], equip: { weapon: null, armor: null, amulet: null, ring: null, boots: null, cape: null },
+        shopItems: [], shopRefreshAt: 0, currentQuests: [],
         boss: {
-        hp: 0,
-        maxHp: 0,
-        attempts: 5,
-        nextSpawn: 0, // Timestamp para daqui a 3 dias
-        active: false
-    }
+            hp: 0,
+            maxHp: 0,
+            dmg: 0,
+            attempts: 5,
+            nextSpawn: 0, // Timestamp para daqui a 3 dias
+            active: false
+        },
+        ability: { lastUsed: 0 },
+        prestige: 0,
+        buffs: { dmgBoostNext: false }
     };
 
+    let invSortMode = 'none'; // não é guardado, reinicia a cada carregamento
+
     const missionNames = ["Caçar Ratos", "Limpar Esgotos", "Escolta Real", "Colher Ervas", "Roubar os Planos", "Matar Slimes", "Pescar", "Treinar Tropas", "Explorar Mina"];
-    const itemNames = { weapon: ["Espada", "Adaga", "Cajado"], armor: ["Túnica", "Couro", "Placas"], amulet: ["Anel", "Colar"] };
+    const itemNames = { weapon: ["Espada", "Adaga", "Cajado"], armor: ["Túnica", "Couro", "Placas"], amulet: ["Colar"], ring: ["Anel"], boots: ["Botas"], cape: ["Capa"] };
+    const slotLabels = { weapon: "Arma", armor: "Armadura", amulet: "Colar", ring: "Anel", boots: "Botas", cape: "Capa" };
+    const attrNames = { str: "Força", vit: "Vida", dex: "Destreza", int: "Inteligência", luk: "Sorte" };
+
+    const ARENA_ENEMIES = ["Goblin Feroz", "Orc Selvagem", "Lobo das Sombras", "Esqueleto Guerreiro", "Troll da Montanha", "Bandido Mascarado", "Aranha Gigante", "Golem de Pedra"];
+
+    const ABILITIES = {
+        'Guerreiro': { name: 'Fúria de Batalha', desc: 'Cura instantaneamente 50% do teu HP máximo.', cooldown: 60000 },
+        'Assassino': { name: 'Golpe Certeiro', desc: 'Ganha ouro instantâneo (5x o teu nível).', cooldown: 60000 },
+        'Mago': { name: 'Surto Arcano', desc: 'Ganha XP instantâneo (5x o teu nível).', cooldown: 60000 }
+    };
+
+    const POTIONS = [
+        { id: 'small', name: 'Poção de Vida', price: 20, effect: 'heal', amount: 50 },
+        { id: 'full', name: 'Elixir Maior', price: 50, effect: 'full_heal' },
+        { id: 'fury', name: 'Elixir de Fúria', price: 40, effect: 'dmg_boost' }
+    ];
 
     // Configuração de Raridades
     const RARITIES = {
@@ -164,12 +238,38 @@
         MITICO:    { name: "Mítico", color: "#ff0000", chance: 0.01, slots: 5 }
     };
 
-    function save() { localStorage.setItem('heroQuestFinalSave', JSON.stringify(p)); }
+    function save() {
+        try {
+            localStorage.setItem('heroQuestFinalSave', JSON.stringify(p));
+        } catch (e) {
+            log("Não foi possível guardar o progresso (armazenamento cheio ou bloqueado).", "var(--btn-red)");
+        }
+    }
+
+    // Preenche campos em falta em saves antigos, para não partir com versões anteriores do jogo
+    function migrateSave() {
+        if (!p.equip) p.equip = {};
+        ['weapon', 'armor', 'amulet', 'ring', 'boots', 'cape'].forEach(s => { if (!(s in p.equip)) p.equip[s] = null; });
+        if (!p.boss) p.boss = { hp: 0, maxHp: 0, dmg: 0, attempts: 5, nextSpawn: 0, active: false };
+        if (p.boss.dmg === undefined) p.boss.dmg = p.lvl * 15;
+        if (!p.ability) p.ability = { lastUsed: 0 };
+        if (p.prestige === undefined) p.prestige = 0;
+        if (!p.buffs) p.buffs = { dmgBoostNext: false };
+        if (p.shopRefreshAt === undefined) p.shopRefreshAt = 0;
+        if (!Array.isArray(p.inv)) p.inv = [];
+        p.saveVersion = CURRENT_SAVE_VERSION;
+    }
 
     function load() {
         const saved = localStorage.getItem('heroQuestFinalSave');
         if (saved) {
-            p = JSON.parse(saved);
+            try {
+                p = JSON.parse(saved);
+            } catch (e) {
+                log("Save corrompido, a começar um novo jogo.", "var(--btn-red)");
+                return;
+            }
+            migrateSave();
             document.getElementById('class-selection').style.display = 'none';
             if (!p.currentQuests || p.currentQuests.length === 0) generateNewQuests();
             if (!p.shopItems || p.shopItems.length === 0) refreshShop();
@@ -197,7 +297,7 @@
             let name = missionNames[Math.floor(Math.random() * missionNames.length)];
             let g = (type === 'gold' ? 40 : (type === 'xp' ? 10 : 25));
             let x = (type === 'xp' ? 80 : (type === 'gold' ? 20 : 45));
-            
+
             p.currentQuests.push({
                 name: name,
                 type: type,
@@ -213,7 +313,7 @@
         let rand = Math.random();
         let rarityKey = "COMUM";
         let cumulative = 0;
-        
+
         for (let key in RARITIES) {
             cumulative += RARITIES[key].chance;
             if (rand <= cumulative) {
@@ -224,18 +324,18 @@
         const rarity = RARITIES[rarityKey];
 
         // 2. Sortear Tipo e Nome
-        const types = ['weapon', 'armor', 'amulet'];
+        const types = ['weapon', 'armor', 'amulet', 'ring', 'boots', 'cape'];
         const t = types[Math.floor(Math.random() * types.length)];
         const baseName = itemNames[t][Math.floor(Math.random() * itemNames[t].length)];
-        
+
         // 3. Gerar Bónus (Atributos)
         let bonuses = {};
         let mainAttr = p.class === 'Guerreiro' ? 'str' : (p.class === 'Assassino' ? 'dex' : 'int');
-        
+
         // Lógica de Atribuição baseada na tua regra:
         if (rarityKey === "COMUM") {
             bonuses[mainAttr] = genValue(quality);
-        } 
+        }
         else if (rarityKey === "INCOMUM") {
             bonuses[mainAttr] = genValue(quality);
             if (Math.random() > 0.5) bonuses['vit'] = genValue(quality, 20); // 50% chance de 2º bónus
@@ -278,8 +378,6 @@
         return Math.floor((Math.random() * 5 + min) * q * multiplier * 0.5) + 1;
     }
 
-    const INV_CAPACITY = 12;
-
     // Adiciona um item à mochila respeitando o limite de slots visíveis
     function addToInventory(item) {
         if (p.inv.length >= INV_CAPACITY) {
@@ -294,7 +392,7 @@
     // uma raridade aleatória e só trocar o rótulo/cor no fim.
     function createMythicItem(quality) {
         const rarity = RARITIES.MITICO;
-        const types = ['weapon', 'armor', 'amulet'];
+        const types = ['weapon', 'armor', 'amulet', 'ring', 'boots', 'cape'];
         const t = types[Math.floor(Math.random() * types.length)];
         const baseName = itemNames[t][Math.floor(Math.random() * itemNames[t].length)];
 
@@ -315,8 +413,81 @@
         };
     }
 
+    function getPrestigeMultiplier() { return 1 + p.prestige * 0.05; }
+
+    function doPrestige() {
+        if (p.lvl < PRESTIGE_LEVEL_REQ) return;
+        if (!confirm(`Fazer Prestígio? Perdes nível, XP, Ouro e atributos base, mas ganhas +5% de Ouro/XP permanente (atual: +${p.prestige * 5}% -> +${(p.prestige + 1) * 5}%). Equipamento e mochila mantêm-se.`)) return;
+
+        p.prestige++;
+        const cls = p.class;
+        p.lvl = 1; p.xp = 0; p.nextLvl = 100; p.points = 0; p.gold = 50; p.arenaRank = 1;
+        p.str = 5; p.dex = 5; p.int = 5; p.luk = 1;
+        if (cls === 'Guerreiro') { p.maxHp = 150; p.str = 15; }
+        else if (cls === 'Assassino') { p.maxHp = 100; p.dex = 15; }
+        else if (cls === 'Mago') { p.maxHp = 70; p.int = 20; }
+        p.hp = p.maxHp;
+        p.boss = { hp: 0, maxHp: 0, dmg: 0, attempts: 5, nextSpawn: 0, active: false };
+
+        log(`PRESTÍGIO! Agora tens +${p.prestige * 5}% de Ouro e XP para sempre.`, "var(--gold)");
+        generateNewQuests();
+        refreshShop();
+        updateUI();
+    }
+
+    function useAbility() {
+        const ab = ABILITIES[p.class];
+        if (!ab) return;
+        const now = Date.now();
+        const remain = (p.ability.lastUsed + ab.cooldown) - now;
+        if (remain > 0) { log(`Habilidade ainda em recarga (${Math.ceil(remain / 1000)}s).`, "var(--btn-red)"); return; }
+
+        if (p.class === 'Guerreiro') {
+            const heal = Math.floor(getTotalAttr('vit') * 0.5);
+            p.hp = Math.min(getTotalAttr('vit'), p.hp + heal);
+            log(`${ab.name}! Recuperaste ${heal} de HP.`, "var(--accent)");
+        } else if (p.class === 'Assassino') {
+            const g = p.lvl * 5;
+            p.gold += g;
+            log(`${ab.name}! Ganhaste ${g} de Ouro.`, "var(--accent)");
+        } else if (p.class === 'Mago') {
+            const x = p.lvl * 5;
+            p.xp += x;
+            checkLvl();
+            log(`${ab.name}! Ganhaste ${x} de XP.`, "var(--accent)");
+        }
+        p.ability.lastUsed = now;
+        updateUI();
+    }
+
+    function enchantItem(idx) {
+        const item = p.inv[idx];
+        if (!item || !item.bonuses || Object.keys(item.bonuses).length === 0) return;
+        const cost = 50 * Object.keys(item.bonuses).length;
+        if (p.gold < cost) { log("Ouro insuficiente para encantar.", "var(--btn-red)"); return; }
+        if (!confirm(`Encantar ${item.name} por ${cost} Ouro?`)) return;
+
+        p.gold -= cost;
+        const keys = Object.keys(item.bonuses);
+        const k = keys[Math.floor(Math.random() * keys.length)];
+        const boost = Math.floor(Math.random() * 3) + 1;
+        item.bonuses[k] += boost;
+        log(`${item.name} encantado! +${boost} ${(attrNames[k] || k.toUpperCase())}.`, "var(--accent)");
+        document.getElementById('item-actions').style.display = 'none';
+        updateUI();
+    }
+
+    function unequip(slot) {
+        const item = p.equip[slot];
+        if (!item) return;
+        if (p.inv.length >= INV_CAPACITY) { log("Mochila cheia! Não é possível desequipar.", "var(--btn-red)"); return; }
+        addToInventory(item);
+        p.equip[slot] = null;
+        updateUI();
+    }
+
     function startQuest(idx) {
-   
+
         // NOVA VERIFICAÇÃO DE VIDA
         if (p.hp <= 1) {
             log("Estás demasiado ferido para ir numa missão! Compra uma poção.", "var(--btn-red)");
@@ -329,7 +500,7 @@
         const container = document.getElementById('progress-container');
         document.querySelectorAll('.q-btn').forEach(b => b.disabled = true);
         container.style.display = 'block';
-        
+
         let start = Date.now();
         let interval = setInterval(() => {
             let elapsed = Date.now() - start;
@@ -343,17 +514,18 @@
     }
 
     function completeQuest(q) {
-        // 1. Cálculo de bónus de Ouro e XP
-        let fG = Math.floor(q.gold * (1 + getTotalAttr('dex')/100));
-        let fX = Math.floor(q.xp * (1 + getTotalAttr('int')/100));
+        // 1. Cálculo de bónus de Ouro e XP (com multiplicador de Prestígio)
+        let fG = Math.floor(q.gold * (1 + getTotalAttr('dex') / 100) * getPrestigeMultiplier());
+        let fX = Math.floor(q.xp * (1 + getTotalAttr('int') / 100) * getPrestigeMultiplier());
         p.gold += fG; p.xp += fX;
 
         // 2. ADICIONAR PERDA DE VIDA (1 a 10)
         let damageTaken = Math.floor(Math.random() * 10) + 1;
         p.hp -= damageTaken;
-        
+        flashDamage();
+
         // Garantir que o HP não fica negativo ou abaixo de 1 (para não morrer em missões)
-        if (p.hp < 1) p.hp = 1; 
+        if (p.hp < 1) p.hp = 1;
 
         log(`Missão feita: +${fG} Ouro, +${fX} XP. Perdeste ${damageTaken} HP.`);
 
@@ -373,7 +545,7 @@
 
     function getTotalAttr(type) {
         let base = (type === 'vit') ? p.maxHp : (p[type] || 0);
-        
+
         Object.values(p.equip).forEach(item => {
             if (item && item.bonuses && item.bonuses[type]) {
                 base += item.bonuses[type];
@@ -387,7 +559,7 @@
         if (p.lvl < 2) return; // Boss só aparece depois do 1º level up, para não confundir no início
         if (!p.boss.active && agora >= p.boss.nextSpawn) {
             // Criar novo Boss baseado no nível do jogador
-            p.boss.maxHp = p.lvl * 1000; 
+            p.boss.maxHp = p.lvl * 1000;
             p.boss.hp = p.boss.maxHp;
             p.boss.dmg = p.lvl * 15; // Dano do boss escala com o nível DELE, não com a tua vida
             p.boss.attempts = 5;
@@ -406,17 +578,23 @@
 
         // 2. Calcular Dano do Jogador
         let dmgAttr = p.class === 'Guerreiro' ? 'str' : p.class === 'Assassino' ? 'dex' : 'int';
-        let playerDamage = getTotalAttr(dmgAttr) * 5; 
+        let playerDamage = getTotalAttr(dmgAttr) * 5;
+        if (p.buffs.dmgBoostNext) {
+            playerDamage = Math.floor(playerDamage * 1.5);
+            p.buffs.dmgBoostNext = false;
+            log("Elixir de Fúria ativo! +50% de dano.", "var(--accent)");
+        }
 
         // 3. Calcular Dano do Boss (O contra-ataque)
         // O dano do Boss é fixo por combate (definido quando ele nasce) e escala com o nível DELE,
         // não com a tua vida/equipamento — antes, ter mais vida fazia o boss bater mais forte.
         let bossDamage = p.boss.dmg || (p.lvl * 15);
-        
+
         // Aplicar danos
         p.boss.hp -= playerDamage;
         p.hp -= bossDamage;
         p.boss.attempts--;
+        flashDamage();
 
         log(`Ataque feroz! Causaste ${playerDamage} de dano.`, "var(--accent)");
         log(`O Boss contra-atacou! Perdeste ${bossDamage} de HP.`, "var(--btn-red)");
@@ -432,15 +610,15 @@
             p.boss.hp = 0;
             p.boss.active = false;
             p.boss.nextSpawn = Date.now() + (3 * 24 * 60 * 60 * 1000); // 3 dias
-            
-            // Recompensas
-            p.gold += p.lvl * 500;
-            p.xp += p.lvl * 1000;
-            
+
+            // Recompensas (com multiplicador de Prestígio)
+            p.gold += Math.floor(p.lvl * 500 * getPrestigeMultiplier());
+            p.xp += Math.floor(p.lvl * 1000 * getPrestigeMultiplier());
+
             // Gera o item Mítico (agora sempre com os 5 atributos, não só o rótulo trocado)
             const itemMitico = createMythicItem(p.lvl);
             const coube = addToInventory(itemMitico);
-            
+
             log("VITÓRIA LENDÁRIA! O Boss caiu e deixou um rasto de ouro" + (coube ? " e um item Mítico!" : "!"), "var(--gold)");
             checkLvl();
         }
@@ -448,11 +626,70 @@
         updateUI(); // Atualiza as barras de vida e textos
     }
 
-    function refreshShop() { p.shopItems = [createItem(p.lvl), createItem(p.lvl)]; }
+    function refreshShop() {
+        p.shopItems = [createItem(p.lvl), createItem(p.lvl)];
+        p.shopRefreshAt = Date.now() + SHOP_REFRESH_INTERVAL;
+    }
 
-    function buyPotion() {
+    function checkShopRefresh() {
+        if (Date.now() >= p.shopRefreshAt) refreshShop();
+    }
+
+    function manualRefreshShop() {
+        if (p.gold < 10) { log("Ouro insuficiente para atualizar a loja.", "var(--btn-red)"); return; }
+        p.gold -= 10;
+        refreshShop();
+        log("Loja atualizada!", "var(--accent)");
+        updateUI();
+    }
+
+    function buyItem(idx) {
+        const it = p.shopItems[idx];
         if (p.inv.length >= INV_CAPACITY) { log("Mochila cheia! Vende algo antes de comprar.", "var(--btn-red)"); return; }
-        if (p.gold >= 20) { p.gold -= 20; addToInventory({name: "Poção", type: 'consumable'}); updateUI(); }
+        if (p.gold >= it.price) { p.gold -= it.price; addToInventory(it); p.shopItems.splice(idx, 1); updateUI(); }
+    }
+
+    function buyPotionById(id) {
+        const pot = POTIONS.find(x => x.id === id);
+        if (!pot) return;
+        if (p.inv.length >= INV_CAPACITY) { log("Mochila cheia! Vende algo antes de comprar.", "var(--btn-red)"); return; }
+        if (p.gold < pot.price) { log("Ouro insuficiente.", "var(--btn-red)"); return; }
+        p.gold -= pot.price;
+        addToInventory({ name: pot.name, type: 'consumable', effect: pot.effect, amount: pot.amount });
+        updateUI();
+    }
+
+    function buildItemTooltip(item) {
+        let lines = [item.name + (item.rarityName ? ` (${item.rarityName})` : '')];
+        if (item.bonuses) {
+            for (let b in item.bonuses) lines.push(`+${item.bonuses[b]} ${attrNames[b] || b}`);
+        }
+        if (item.price) lines.push(`Valor: ${item.price} Ouro`);
+        return lines.join('\n');
+    }
+
+    function getSortedInventoryIndices() {
+        let indices = p.inv.map((_, i) => i);
+        if (invSortMode === 'rarity') {
+            const order = ['Mítico', 'Lendário', 'Épico', 'Raro', 'Incomum', 'Comum'];
+            indices.sort((a, b) => {
+                const ra = order.indexOf(p.inv[a].rarityName); const rb = order.indexOf(p.inv[b].rarityName);
+                return (ra === -1 ? 999 : ra) - (rb === -1 ? 999 : rb);
+            });
+        } else if (invSortMode === 'type') {
+            indices.sort((a, b) => (p.inv[a].type || '').localeCompare(p.inv[b].type || ''));
+        }
+        return indices;
+    }
+
+    function setInvSort(mode) { invSortMode = mode; updateUI(); }
+
+    function flashDamage() {
+        const box = document.querySelector('.stats-grid');
+        if (!box) return;
+        box.classList.remove('flash-dmg');
+        void box.offsetWidth; // reinicia a animação mesmo em danos seguidos
+        box.classList.add('flash-dmg');
     }
 
     function updateUI() {
@@ -465,7 +702,7 @@
         document.getElementById('hp-cur').innerText = Math.floor(p.hp);
         document.getElementById('hp-max').innerText = getTotalAttr('vit');
         document.getElementById('arena-rank').innerText = p.arenaRank;
-        
+
         let dmgA = p.class === 'Guerreiro' ? 'str' : p.class === 'Assassino' ? 'dex' : 'int';
         document.getElementById('player-dmg-val').innerText = getTotalAttr(dmgA);
 
@@ -473,15 +710,21 @@
         hpEl.innerText = Math.floor(p.hp);
         hpEl.style.color = p.hp <= 1 ? "var(--btn-red)" : "white"; // Fica vermelho se estiver a 1
 
+        // Barra de HP colorida
+        const maxHpVal = getTotalAttr('vit') || 1;
+        const pct = Math.max(0, Math.min(100, (Math.max(0, p.hp) / maxHpVal) * 100));
+        const hpBar = document.getElementById('hp-bar-inner');
+        hpBar.style.width = pct + '%';
+        hpBar.style.background = pct > 50 ? '#4caf50' : (pct > 20 ? '#e6b800' : '#c0392b');
 
         // Render Quests corrigido dentro da função updateUI
-        const qB = document.getElementById('quest-board'); 
+        const qB = document.getElementById('quest-board');
         qB.innerHTML = '';
 
         p.currentQuests.forEach((q, i) => {
             const isLowHP = p.hp <= 1; // Verifica se a vida está no limite
             const tClass = q.type === 'gold' ? 'tag-gold' : q.type === 'xp' ? 'tag-xp' : 'tag-bal';
-            
+
             // Configuração do botão baseada no HP
             const btnStyle = isLowHP ? 'style="background:#555; cursor:not-allowed;"' : '';
             const btnText = isLowHP ? 'Ferido!' : 'Ir';
@@ -495,50 +738,65 @@
                 <button class="q-btn" onclick="startQuest(${i})" ${btnStyle}>
                     ${btnText}
                 </button>`;
-            
+
             qB.appendChild(div);
         });
 
 
         // Equipamento Atual (Slots)
-        ['weapon', 'armor', 'amulet'].forEach(slot => {
+        ['weapon', 'armor', 'amulet', 'ring', 'boots', 'cape'].forEach(slot => {
             const item = p.equip[slot];
             const el = document.getElementById('name-' + slot);
+            const slotEl = document.getElementById('slot-' + slot);
             if (item) {
                 let bTxt = "";
                 for (let b in item.bonuses) bTxt += `+${item.bonuses[b]}${b.toUpperCase()} `;
                 el.innerHTML = `<span style="color:${item.rarityColor}">${item.name}</span><br><small>${bTxt}</small>`;
+                if (slotEl) slotEl.title = buildItemTooltip(item);
             } else {
                 el.innerText = "Vazio";
+                if (slotEl) slotEl.title = slotLabels[slot] + ": vazio (clica num item na mochila para equipar)";
             }
         });
 
+        // Habilidade
+        const abInfo = ABILITIES[p.class];
+        if (abInfo) document.getElementById('ability-desc').innerHTML = `<b>${abInfo.name}</b>: ${abInfo.desc}`;
+
+        // Prestígio
+        document.getElementById('prestige-lvl').innerText = p.prestige;
+        document.getElementById('prestige-bonus').innerText = p.prestige * 5;
+        const btnPrestige = document.getElementById('btn-prestige');
+        btnPrestige.disabled = p.lvl < PRESTIGE_LEVEL_REQ;
+        btnPrestige.innerText = p.lvl < PRESTIGE_LEVEL_REQ ? `Fazer Prestígio (requer Nível ${PRESTIGE_LEVEL_REQ})` : 'Fazer Prestígio';
+
         // Atributos
-        const attrList = document.getElementById('attr-list'); 
-        attrList.innerHTML = '';
-        const attrNames = { str: "Força", vit: "Vida", dex: "Destreza", int: "Inteligência", luk: "Sorte" };
-        
+        const attrList = document.getElementById('attr-list'); attrList.innerHTML = '';
+
         const mainStatInfo = p.class === 'Guerreiro' ? 'Força' : p.class === 'Assassino' ? 'Destreza' : 'Inteligência';
         attrList.innerHTML = `<p style="font-size: 0.8em; color: #aaa; margin-bottom: 10px;">Dano principal: <b style="color: white;">${mainStatInfo}</b></p>`;
 
         ['str', 'vit', 'dex', 'int', 'luk'].forEach(a => {
             const row = document.createElement('div');
-            row.className = "attr-row"; 
+            row.className = "attr-row";
             row.style = "display:flex; justify-content:space-between; align-items:center; margin-bottom:8px; background:#444; padding:8px 10px; border-radius:4px;";
             row.innerHTML = `<span>${attrNames[a]}: <b>${getTotalAttr(a)}</b></span>
                  <button class="plus-btn" onclick="addAttr('${a}')" style="width:28px; height:28px; background:#4caf50; color:white; border:none; cursor:pointer; border-radius:50%; font-weight:bold;">+</button>`;            attrList.appendChild(row);
         });
 
-        // Inventário
+        // Inventário (com ordenação de exibição)
         const invL = document.getElementById('inventory-list'); invL.innerHTML = '';
-        for(let i=0; i<12; i++) {
+        const order = getSortedInventoryIndices();
+        for (let slotPos = 0; slotPos < INV_CAPACITY; slotPos++) {
             const s = document.createElement('div'); s.className = 'slot';
-            const item = p.inv[i];
-            if (item) { 
+            const realIdx = order[slotPos];
+            const item = realIdx !== undefined ? p.inv[realIdx] : null;
+            if (item) {
                 let bTxt = "";
-                if(item.bonuses) for(let b in item.bonuses) bTxt += `+${item.bonuses[b]} `;
-                s.innerHTML = `<b style="color:${item.rarityColor || '#fff'}">${item.name}</b><br><small>${bTxt}</small>`; 
-                s.onclick = () => showActions(item, i); 
+                if (item.bonuses) for (let b in item.bonuses) bTxt += `+${item.bonuses[b]} `;
+                s.innerHTML = `<b style="color:${item.rarityColor || '#fff'}">${item.name}</b><br><small>${bTxt}</small>`;
+                s.title = buildItemTooltip(item);
+                s.onclick = () => showActions(item, realIdx);
             } else { s.innerText = "Vazio"; }
             invL.appendChild(s);
         }
@@ -551,20 +809,30 @@
             document.getElementById('boss-hp-val').innerText = p.boss.hp;
             document.getElementById('boss-hp-max').innerText = p.boss.maxHp;
             document.getElementById('boss-attempts').innerText = p.boss.attempts;
-            
+
             let perc = (p.boss.hp / p.boss.maxHp) * 100;
             document.getElementById('boss-hp-bar').style.width = perc + "%";
-            
+
             document.getElementById('btn-attack-boss').disabled = (p.boss.attempts <= 0);
         } else {
             bossArea.style.display = 'none';
         }
 
         // Loja
+        checkShopRefresh();
+
+        const potD = document.getElementById('potion-list'); potD.innerHTML = '';
+        POTIONS.forEach(pot => {
+            const div = document.createElement('div'); div.className = 'item-card';
+            div.innerHTML = `<strong>🧪 ${pot.name}</strong> (${pot.price} Ouro)
+                            <button onclick="buyPotionById('${pot.id}')">Comprar</button>`;
+            potD.appendChild(div);
+        });
+
         const sD = document.getElementById('shop-items'); sD.innerHTML = '<h4>Mercado</h4>';
         p.shopItems.forEach((item, i) => {
             let bTxt = "";
-            for(let b in item.bonuses) bTxt += `+${item.bonuses[b]}${b.toUpperCase()} `;
+            for (let b in item.bonuses) bTxt += `+${item.bonuses[b]}${b.toUpperCase()} `;
             const div = document.createElement('div'); div.className = 'item-card';
             div.innerHTML = `<b style="color:${item.rarityColor}">${item.name}</b> (${item.rarityName})<br><small>${bTxt}</small>
                             <button onclick="buyItem(${i})">Comprar (${item.price} G)</button>`;
@@ -577,31 +845,67 @@
         const area = document.getElementById('item-actions'); area.style.display = 'block';
         document.getElementById('action-info').innerHTML = `<b>${item.name}</b>`;
         const btn = document.getElementById('btn-equip-use');
+        const enchantBtn = document.getElementById('btn-enchant');
+
         if (item.type === 'consumable') {
-            btn.innerText = "Beber"; btn.onclick = () => { p.hp = Math.min(getTotalAttr('vit'), p.hp+50); p.inv.splice(idx,1); updateUI(); area.style.display='none'; };
+            enchantBtn.style.display = 'none';
+            btn.innerText = "Usar";
+            btn.onclick = () => {
+                if (item.effect === 'full_heal') {
+                    p.hp = getTotalAttr('vit');
+                    log("Curaste todo o HP!", "var(--accent)");
+                } else if (item.effect === 'dmg_boost') {
+                    p.buffs.dmgBoostNext = true;
+                    log("Elixir de Fúria pronto para o próximo combate!", "var(--accent)");
+                } else {
+                    const amount = item.amount || 50;
+                    p.hp = Math.min(getTotalAttr('vit'), p.hp + amount);
+                    log(`Recuperaste ${amount} HP.`, "var(--accent)");
+                }
+                p.inv.splice(idx, 1); updateUI(); area.style.display = 'none';
+            };
         } else {
             btn.innerText = "Equipar"; btn.onclick = () => {
                 const t = item.type; if (p.equip[t]) p.inv.push(p.equip[t]);
-                p.equip[t] = item; p.inv.splice(idx,1); updateUI(); area.style.display='none';
+                p.equip[t] = item; p.inv.splice(idx, 1); updateUI(); area.style.display = 'none';
             };
+
+            if (item.bonuses && Object.keys(item.bonuses).length > 0) {
+                const cost = 50 * Object.keys(item.bonuses).length;
+                enchantBtn.style.display = 'block';
+                enchantBtn.innerText = `Encantar (${cost}G)`;
+                enchantBtn.onclick = () => enchantItem(idx);
+            } else {
+                enchantBtn.style.display = 'none';
+            }
         }
-        document.getElementById('btn-sell').onclick = () => { p.gold += 15; p.inv.splice(idx, 1); area.style.display = 'none'; updateUI(); };
+        document.getElementById('btn-sell').onclick = () => {
+            if (!confirm(`Vender ${item.name} por 15 Ouro?`)) return;
+            p.gold += 15; p.inv.splice(idx, 1); area.style.display = 'none'; updateUI();
+        };
     }
 
     function addAttr(type) { if (p.points > 0) { p.points--; if (type === 'vit') { p.maxHp += 20; p.hp += 20; } else p[type] += 2; updateUI(); } }
     function checkLvl() { if (p.xp >= p.nextLvl) { p.lvl++; p.xp -= p.nextLvl; p.nextLvl = Math.floor(p.nextLvl * 1.5); p.points += 5; p.hp = getTotalAttr('vit'); log("LEVEL UP!"); } }
-    function buyItem(idx) {
-        const it = p.shopItems[idx];
-        if (p.inv.length >= INV_CAPACITY) { log("Mochila cheia! Vende algo antes de comprar.", "var(--btn-red)"); return; }
-        if (p.gold >= it.price) { p.gold -= it.price; addToInventory(it); p.shopItems.splice(idx,1); updateUI(); }
-    }
-    
+
     function fightArena() {
+        const enemyName = ARENA_ENEMIES[Math.floor(Math.random() * ARENA_ENEMIES.length)];
         let bHp = p.arenaRank * 70, bDmg = p.arenaRank * 12;
         let pDmg = getTotalAttr(p.class === 'Guerreiro' ? 'str' : p.class === 'Assassino' ? 'dex' : 'int');
+        if (p.buffs.dmgBoostNext) {
+            pDmg = Math.floor(pDmg * 1.5);
+            p.buffs.dmgBoostNext = false;
+            log("Elixir de Fúria ativo! +50% de dano.", "var(--accent)");
+        }
+        log(`A enfrentar ${enemyName} (Rank ${p.arenaRank})...`);
         while (p.hp > 0 && bHp > 0) { bHp -= pDmg; if (bHp > 0) p.hp -= bDmg; }
-        if (bHp <= 0) { log("VITÓRIA!"); p.gold += p.arenaRank * 100; p.xp += p.arenaRank * 50; p.arenaRank++; checkLvl(); } 
-        else { p.hp = 1; log("DERROTA!"); }
+        if (bHp <= 0) {
+            log(`VITÓRIA contra ${enemyName}!`);
+            p.gold += Math.floor(p.arenaRank * 100 * getPrestigeMultiplier());
+            p.xp += Math.floor(p.arenaRank * 50 * getPrestigeMultiplier());
+            p.arenaRank++; checkLvl();
+        }
+        else { p.hp = 1; flashDamage(); log(`DERROTA contra ${enemyName}!`); }
         updateUI();
     }
 
@@ -618,7 +922,80 @@
         logDiv.innerHTML = `<div style="color:${color}">> ${msg}</div>` + logDiv.innerHTML;
     }
 
-    function resetGame() { if(confirm("Reset?")) { localStorage.removeItem('heroQuestFinalSave'); location.reload(); } }
+    function resetGame() { if (confirm("Reset?")) { localStorage.removeItem('heroQuestFinalSave'); location.reload(); } }
+
+    function exportSave() {
+        const dataStr = JSON.stringify(p, null, 2);
+        const blob = new Blob([dataStr], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `hero-quest-save-${Date.now()}.json`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+        log("Save exportado!", "var(--accent)");
+    }
+
+    function importSaveFile(input) {
+        const file = input.files[0];
+        if (!file) return;
+        const reader = new FileReader();
+        reader.onload = (e) => {
+            try {
+                const imported = JSON.parse(e.target.result);
+                if (!imported || typeof imported !== 'object' || !imported.class) {
+                    throw new Error('Ficheiro inválido');
+                }
+                if (!confirm("Importar este save vai substituir o progresso atual. Continuar?")) { input.value = ''; return; }
+                p = imported;
+                migrateSave();
+                document.getElementById('class-selection').style.display = 'none';
+                if (!p.currentQuests || p.currentQuests.length === 0) generateNewQuests();
+                if (!p.shopItems || p.shopItems.length === 0) refreshShop();
+                save();
+                updateUI();
+                log("Save importado com sucesso!", "var(--accent)");
+            } catch (err) {
+                log("Ficheiro de save inválido.", "var(--btn-red)");
+            }
+            input.value = '';
+        };
+        reader.readAsText(file);
+    }
+
+    function formatMs(ms) {
+        const totalSec = Math.max(0, Math.ceil(ms / 1000));
+        const m = Math.floor(totalSec / 60);
+        const s = totalSec % 60;
+        return `${m}m ${s.toString().padStart(2, '0')}s`;
+    }
+
+    function tickTimers() {
+        // Cooldown da habilidade
+        const ab = ABILITIES[p.class];
+        const btn = document.getElementById('btn-ability');
+        if (ab && btn) {
+            const remain = (p.ability.lastUsed + ab.cooldown) - Date.now();
+            if (remain > 0) {
+                btn.disabled = true;
+                btn.innerText = `Recarregando (${Math.ceil(remain / 1000)}s)`;
+            } else {
+                btn.disabled = false;
+                btn.innerText = "Usar Habilidade";
+            }
+        }
+        // Contagem da loja
+        const shopTimer = document.getElementById('shop-refresh-timer');
+        if (shopTimer) {
+            const remain = p.shopRefreshAt - Date.now();
+            shopTimer.innerText = remain > 0 ? `Novos itens em ${formatMs(remain)}` : 'Prestes a renovar...';
+        }
+    }
+
+    setInterval(() => { if (p.class) tickTimers(); }, 1000);
+
     load();
 
     if ('serviceWorker' in navigator) {
