@@ -169,6 +169,8 @@
             <p>HP: <span id="boss-hp-val">0</span> / <span id="boss-hp-max">0</span></p>
             <p>Tentativas: <span id="boss-attempts">5</span>/5</p>
             <button onclick="attackBoss()" id="btn-attack-boss" style="background: var(--gold); color: black;">ATACAR BOSS</button>
+            <button onclick="buyBossAttempt()" id="btn-buy-attempt" style="background: #555;">Comprar Tentativa Extra</button>
+            <small id="boss-flee-timer" style="display:block; margin-top:8px; color:#ff8888;"></small>
         </div>
     </div>
 
@@ -200,7 +202,8 @@
             dmg: 0,
             attempts: 5,
             nextSpawn: 0, // Timestamp para daqui a 3 dias
-            active: false
+            active: false,
+            depletedAt: 0 // Timestamp de quando as tentativas chegaram a 0, para o boss fugir depois de 1h
         },
         ability: { lastUsed: 0 },
         prestige: 0,
@@ -238,6 +241,24 @@
         MITICO:    { name: "Mítico", color: "#ff0000", chance: 0.01, slots: 5 }
     };
 
+    // Janela de confirmação própria do jogo (evita depender do confirm() nativo do
+    // browser, que alguns browsers deixam de mostrar depois de vários usos na mesma página)
+    function showConfirm(message, onYes) {
+        const overlay = document.createElement('div');
+        overlay.style = 'position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.7); z-index:200; display:flex; align-items:center; justify-content:center;';
+        overlay.innerHTML = `
+            <div style="background:#2c2c2c; border:2px solid #555; border-radius:10px; padding:20px; max-width:300px; text-align:center;">
+                <p style="margin:0 0 15px 0;">${message}</p>
+                <div style="display:flex; gap:10px;">
+                    <button id="confirm-yes" style="background:#4caf50;">Sim</button>
+                    <button id="confirm-no" style="background:#a32a2a;">Não</button>
+                </div>
+            </div>`;
+        document.body.appendChild(overlay);
+        document.getElementById('confirm-yes').onclick = () => { document.body.removeChild(overlay); onYes(); };
+        document.getElementById('confirm-no').onclick = () => { document.body.removeChild(overlay); };
+    }
+
     function save() {
         try {
             localStorage.setItem('heroQuestFinalSave', JSON.stringify(p));
@@ -250,8 +271,9 @@
     function migrateSave() {
         if (!p.equip) p.equip = {};
         ['weapon', 'armor', 'amulet', 'ring', 'boots', 'cape'].forEach(s => { if (!(s in p.equip)) p.equip[s] = null; });
-        if (!p.boss) p.boss = { hp: 0, maxHp: 0, dmg: 0, attempts: 5, nextSpawn: 0, active: false };
+        if (!p.boss) p.boss = { hp: 0, maxHp: 0, dmg: 0, attempts: 5, nextSpawn: 0, active: false, depletedAt: 0 };
         if (p.boss.dmg === undefined) p.boss.dmg = p.lvl * 15;
+        if (p.boss.depletedAt === undefined) p.boss.depletedAt = 0;
         if (!p.ability) p.ability = { lastUsed: 0 };
         if (p.prestige === undefined) p.prestige = 0;
         if (!p.buffs) p.buffs = { dmgBoostNext: false };
@@ -417,22 +439,22 @@
 
     function doPrestige() {
         if (p.lvl < PRESTIGE_LEVEL_REQ) return;
-        if (!confirm(`Fazer Prestígio? Perdes nível, XP, Ouro e atributos base, mas ganhas +5% de Ouro/XP permanente (atual: +${p.prestige * 5}% -> +${(p.prestige + 1) * 5}%). Equipamento e mochila mantêm-se.`)) return;
+        showConfirm(`Fazer Prestígio? Perdes nível, XP, Ouro e atributos base, mas ganhas +5% de Ouro/XP permanente (atual: +${p.prestige * 5}% -> +${(p.prestige + 1) * 5}%). Equipamento e mochila mantêm-se.`, () => {
+            p.prestige++;
+            const cls = p.class;
+            p.lvl = 1; p.xp = 0; p.nextLvl = 100; p.points = 0; p.gold = 50; p.arenaRank = 1;
+            p.str = 5; p.dex = 5; p.int = 5; p.luk = 1;
+            if (cls === 'Guerreiro') { p.maxHp = 150; p.str = 15; }
+            else if (cls === 'Assassino') { p.maxHp = 100; p.dex = 15; }
+            else if (cls === 'Mago') { p.maxHp = 70; p.int = 20; }
+            p.hp = p.maxHp;
+            p.boss = { hp: 0, maxHp: 0, dmg: 0, attempts: 5, nextSpawn: 0, active: false, depletedAt: 0 };
 
-        p.prestige++;
-        const cls = p.class;
-        p.lvl = 1; p.xp = 0; p.nextLvl = 100; p.points = 0; p.gold = 50; p.arenaRank = 1;
-        p.str = 5; p.dex = 5; p.int = 5; p.luk = 1;
-        if (cls === 'Guerreiro') { p.maxHp = 150; p.str = 15; }
-        else if (cls === 'Assassino') { p.maxHp = 100; p.dex = 15; }
-        else if (cls === 'Mago') { p.maxHp = 70; p.int = 20; }
-        p.hp = p.maxHp;
-        p.boss = { hp: 0, maxHp: 0, dmg: 0, attempts: 5, nextSpawn: 0, active: false };
-
-        log(`PRESTÍGIO! Agora tens +${p.prestige * 5}% de Ouro e XP para sempre.`, "var(--gold)");
-        generateNewQuests();
-        refreshShop();
-        updateUI();
+            log(`PRESTÍGIO! Agora tens +${p.prestige * 5}% de Ouro e XP para sempre.`, "var(--gold)");
+            generateNewQuests();
+            refreshShop();
+            updateUI();
+        });
     }
 
     function useAbility() {
@@ -465,16 +487,16 @@
         if (!item || !item.bonuses || Object.keys(item.bonuses).length === 0) return;
         const cost = 50 * Object.keys(item.bonuses).length;
         if (p.gold < cost) { log("Ouro insuficiente para encantar.", "var(--btn-red)"); return; }
-        if (!confirm(`Encantar ${item.name} por ${cost} Ouro?`)) return;
-
-        p.gold -= cost;
-        const keys = Object.keys(item.bonuses);
-        const k = keys[Math.floor(Math.random() * keys.length)];
-        const boost = Math.floor(Math.random() * 3) + 1;
-        item.bonuses[k] += boost;
-        log(`${item.name} encantado! +${boost} ${(attrNames[k] || k.toUpperCase())}.`, "var(--accent)");
-        document.getElementById('item-actions').style.display = 'none';
-        updateUI();
+        showConfirm(`Encantar ${item.name} por ${cost} Ouro?`, () => {
+            p.gold -= cost;
+            const keys = Object.keys(item.bonuses);
+            const k = keys[Math.floor(Math.random() * keys.length)];
+            const boost = Math.floor(Math.random() * 3) + 1;
+            item.bonuses[k] += boost;
+            log(`${item.name} encantado! +${boost} ${(attrNames[k] || k.toUpperCase())}.`, "var(--accent)");
+            document.getElementById('item-actions').style.display = 'none';
+            updateUI();
+        });
     }
 
     function unequip(slot) {
@@ -564,8 +586,39 @@
             p.boss.dmg = p.lvl * 15; // Dano do boss escala com o nível DELE, não com a tua vida
             p.boss.attempts = 5;
             p.boss.active = true;
+            p.boss.depletedAt = 0;
             log("UM BOSS MÍTICO APARECEU!", "var(--gold)");
         }
+    }
+
+    const BOSS_FLEE_TIME = 60 * 60 * 1000; // 1 hora sem tentativas e o boss foge
+
+    // Se ficares sem tentativas e não pagares por mais, o boss não fica preso para sempre:
+    // foge ao fim de 1h e volta a contar os 3 dias normais para o próximo aparecer.
+    function checkBossFlee() {
+        if (p.boss.active && p.boss.attempts <= 0 && p.boss.depletedAt) {
+            if (Date.now() - p.boss.depletedAt >= BOSS_FLEE_TIME) {
+                p.boss.active = false;
+                p.boss.depletedAt = 0;
+                p.boss.nextSpawn = Date.now() + (3 * 24 * 60 * 60 * 1000);
+                log("O Boss fugiu enquanto recuperavas forças! Vai demorar a aparecer outro.", "var(--btn-red)");
+            }
+        }
+    }
+
+    function getBossAttemptCost() { return p.lvl * 15; }
+
+    function buyBossAttempt() {
+        if (!p.boss.active) return;
+        const cost = getBossAttemptCost();
+        if (p.gold < cost) { log(`Precisas de ${cost} Ouro para uma tentativa extra.`, "var(--btn-red)"); return; }
+        showConfirm(`Comprar 1 tentativa extra contra o Boss por ${cost} Ouro?`, () => {
+            p.gold -= cost;
+            p.boss.attempts++;
+            p.boss.depletedAt = 0; // já não está "sem tentativas", para parar a contagem de fuga
+            log("Compraste uma tentativa extra contra o Boss!", "var(--accent)");
+            updateUI();
+        });
     }
 
     function attackBoss() {
@@ -605,10 +658,16 @@
             log("Foste nocauteado pelo Boss! Recupera as tuas forças.", "var(--btn-red)");
         }
 
+        // 4b. Se as tentativas chegaram a 0 e o boss continua vivo, começa a contagem para ele fugir
+        if (p.boss.attempts <= 0 && p.boss.hp > 0 && !p.boss.depletedAt) {
+            p.boss.depletedAt = Date.now();
+        }
+
         // 5. Verificação de Vitória (Se o Boss morreu)
         if (p.boss.hp <= 0) {
             p.boss.hp = 0;
             p.boss.active = false;
+            p.boss.depletedAt = 0;
             p.boss.nextSpawn = Date.now() + (3 * 24 * 60 * 60 * 1000); // 3 dias
 
             // Recompensas (com multiplicador de Prestígio)
@@ -802,6 +861,7 @@
         }
 
         checkBossSpawn(); // Verifica se o boss deve nascer
+        checkBossFlee(); // Verifica se o boss deve fugir por falta de tentativas
 
         const bossArea = document.getElementById('boss-area');
         if (p.boss.active) {
@@ -814,6 +874,7 @@
             document.getElementById('boss-hp-bar').style.width = perc + "%";
 
             document.getElementById('btn-attack-boss').disabled = (p.boss.attempts <= 0);
+            document.getElementById('btn-buy-attempt').innerText = `Comprar Tentativa Extra (${getBossAttemptCost()} Ouro)`;
         } else {
             bossArea.style.display = 'none';
         }
@@ -880,8 +941,9 @@
             }
         }
         document.getElementById('btn-sell').onclick = () => {
-            if (!confirm(`Vender ${item.name} por 15 Ouro?`)) return;
-            p.gold += 15; p.inv.splice(idx, 1); area.style.display = 'none'; updateUI();
+            showConfirm(`Vender ${item.name} por 15 Ouro?`, () => {
+                p.gold += 15; p.inv.splice(idx, 1); area.style.display = 'none'; updateUI();
+            });
         };
     }
 
@@ -922,7 +984,12 @@
         logDiv.innerHTML = `<div style="color:${color}">> ${msg}</div>` + logDiv.innerHTML;
     }
 
-    function resetGame() { if (confirm("Reset?")) { localStorage.removeItem('heroQuestFinalSave'); location.reload(); } }
+    function resetGame() {
+        showConfirm("Reset? Vais perder todo o progresso.", () => {
+            localStorage.removeItem('heroQuestFinalSave');
+            location.reload();
+        });
+    }
 
     function exportSave() {
         const dataStr = JSON.stringify(p, null, 2);
@@ -948,15 +1015,16 @@
                 if (!imported || typeof imported !== 'object' || !imported.class) {
                     throw new Error('Ficheiro inválido');
                 }
-                if (!confirm("Importar este save vai substituir o progresso atual. Continuar?")) { input.value = ''; return; }
-                p = imported;
-                migrateSave();
-                document.getElementById('class-selection').style.display = 'none';
-                if (!p.currentQuests || p.currentQuests.length === 0) generateNewQuests();
-                if (!p.shopItems || p.shopItems.length === 0) refreshShop();
-                save();
-                updateUI();
-                log("Save importado com sucesso!", "var(--accent)");
+                showConfirm("Importar este save vai substituir o progresso atual. Continuar?", () => {
+                    p = imported;
+                    migrateSave();
+                    document.getElementById('class-selection').style.display = 'none';
+                    if (!p.currentQuests || p.currentQuests.length === 0) generateNewQuests();
+                    if (!p.shopItems || p.shopItems.length === 0) refreshShop();
+                    save();
+                    updateUI();
+                    log("Save importado com sucesso!", "var(--accent)");
+                });
             } catch (err) {
                 log("Ficheiro de save inválido.", "var(--btn-red)");
             }
@@ -991,6 +1059,16 @@
         if (shopTimer) {
             const remain = p.shopRefreshAt - Date.now();
             shopTimer.innerText = remain > 0 ? `Novos itens em ${formatMs(remain)}` : 'Prestes a renovar...';
+        }
+        // Contagem até o boss fugir, quando sem tentativas
+        const fleeTimer = document.getElementById('boss-flee-timer');
+        if (fleeTimer) {
+            if (p.boss.active && p.boss.attempts <= 0 && p.boss.depletedAt) {
+                const remain = BOSS_FLEE_TIME - (Date.now() - p.boss.depletedAt);
+                fleeTimer.innerText = remain > 0 ? `O Boss foge em ${formatMs(remain)} se não compares mais tentativas!` : '';
+            } else {
+                fleeTimer.innerText = '';
+            }
         }
     }
 
