@@ -2,7 +2,7 @@
 <html lang="pt">
 <head>
     <meta charset="UTF-8">
-    <title>Hero Quest: Gear & Random Missions</title>
+    <title>Hero Quest: Gear Master</title>
     <style>
         :root { --main-bg: #1a1a1a; --card-bg: #2c2c2c; --accent: #00ffcc; --btn-blue: #008cba; --btn-red: #a32a2a; --gold: #ffcc00; }
         body { background-color: var(--main-bg); color: white; font-family: 'Segoe UI', sans-serif; display: flex; justify-content: center; padding: 10px; }
@@ -41,6 +41,7 @@
         #progress-bar { width: 0%; height: 100%; background: #4caf50; }
 
         .log { font-size: 0.8em; color: #ccc; margin-top: 15px; height: 70px; overflow-y: auto; background: #111; padding: 10px; border-radius: 5px; }
+        .highlight { color: var(--gold); font-weight: bold; }
     </style>
 
     <link rel="manifest" href="manifest.json">
@@ -59,7 +60,7 @@
     </div>
 
     <div style="text-align: center; margin-bottom: 10px;">
-        <h2 style="color: var(--accent); margin: 0;">Hero Quest: Gear & Random</h2>
+        <h2 style="color: var(--accent); margin: 0;">Hero Quest: Gear Master</h2>
         <small><span id="display-class">...</span> Nível <span id="lvl">1</span></small>
     </div>
     
@@ -71,11 +72,11 @@
     </div>
 
     <div class="tabs">
-        <button class="tab-btn active" onclick="openTab('quests')">Taberna</button>
-        <button class="tab-btn" onclick="openTab('gear')">Herói</button>
-        <button class="tab-btn" onclick="openTab('inv')">Mochila</button>
-        <button class="tab-btn" onclick="openTab('shop')">Loja</button>
-        <button class="tab-btn" onclick="openTab('arena')">Arena</button>
+        <button class="tab-btn active" onclick="openTab('quests', event)">Taberna</button>
+        <button class="tab-btn" onclick="openTab('gear', event)">Herói</button>
+        <button class="tab-btn" onclick="openTab('inv', event)">Mochila</button>
+        <button class="tab-btn" onclick="openTab('shop', event)">Loja</button>
+        <button class="tab-btn" onclick="openTab('arena', event)">Arena</button>
     </div>
 
     <div id="quests" class="tab-content active">
@@ -277,6 +278,43 @@
         return Math.floor((Math.random() * 5 + min) * q * multiplier * 0.5) + 1;
     }
 
+    const INV_CAPACITY = 12;
+
+    // Adiciona um item à mochila respeitando o limite de slots visíveis
+    function addToInventory(item) {
+        if (p.inv.length >= INV_CAPACITY) {
+            log("Mochila cheia! Vende ou usa itens antes de continuar.", "var(--btn-red)");
+            return false;
+        }
+        p.inv.push(item);
+        return true;
+    }
+
+    // Gera sempre um item Mítico "a sério" (5 atributos), em vez de sortear
+    // uma raridade aleatória e só trocar o rótulo/cor no fim.
+    function createMythicItem(quality) {
+        const rarity = RARITIES.MITICO;
+        const types = ['weapon', 'armor', 'amulet'];
+        const t = types[Math.floor(Math.random() * types.length)];
+        const baseName = itemNames[t][Math.floor(Math.random() * itemNames[t].length)];
+
+        let bonuses = {};
+        ['str', 'vit', 'dex', 'int', 'luk'].forEach(attr => {
+            let mult = (attr === 'vit') ? 20 : 1;
+            bonuses[attr] = genValue(quality, mult);
+        });
+
+        return {
+            id: Date.now() + Math.random(),
+            name: baseName,
+            rarityName: rarity.name,
+            rarityColor: rarity.color,
+            type: t,
+            bonuses: bonuses,
+            price: quality * (rarity.slots * 50)
+        };
+    }
+
     function startQuest(idx) {
    
         // NOVA VERIFICAÇÃO DE VIDA
@@ -317,13 +355,14 @@
         // Garantir que o HP não fica negativo ou abaixo de 1 (para não morrer em missões)
         if (p.hp < 1) p.hp = 1; 
 
-        log(`Missão feita: +${fG} Ouro, +${fX} XP. Perbeste ${damageTaken} HP.`);
+        log(`Missão feita: +${fG} Ouro, +${fX} XP. Perdeste ${damageTaken} HP.`);
 
         // 3. Sistema de Loot (restante código que já tens)
         if (Math.random() < 0.15) {
             const item = createItem(p.lvl);
-            p.inv.push(item);
-            log(`LOOT: Encontraste ${item.name}!`, "var(--accent)");
+            if (addToInventory(item)) {
+                log(`LOOT: Encontraste ${item.name}!`, "var(--accent)");
+            }
         }
 
         checkLvl();
@@ -345,10 +384,12 @@
 
     function checkBossSpawn() {
         const agora = Date.now();
+        if (p.lvl < 2) return; // Boss só aparece depois do 1º level up, para não confundir no início
         if (!p.boss.active && agora >= p.boss.nextSpawn) {
             // Criar novo Boss baseado no nível do jogador
             p.boss.maxHp = p.lvl * 1000; 
             p.boss.hp = p.boss.maxHp;
+            p.boss.dmg = p.lvl * 15; // Dano do boss escala com o nível DELE, não com a tua vida
             p.boss.attempts = 5;
             p.boss.active = true;
             log("UM BOSS MÍTICO APARECEU!", "var(--gold)");
@@ -368,8 +409,9 @@
         let playerDamage = getTotalAttr(dmgAttr) * 5; 
 
         // 3. Calcular Dano do Boss (O contra-ataque)
-        // O Boss tira, por exemplo, 15% da vida máxima do jogador por ataque
-        let bossDamage = Math.floor(getTotalAttr('vit') * 0.35); 
+        // O dano do Boss é fixo por combate (definido quando ele nasce) e escala com o nível DELE,
+        // não com a tua vida/equipamento — antes, ter mais vida fazia o boss bater mais forte.
+        let bossDamage = p.boss.dmg || (p.lvl * 15);
         
         // Aplicar danos
         p.boss.hp -= playerDamage;
@@ -395,13 +437,11 @@
             p.gold += p.lvl * 500;
             p.xp += p.lvl * 1000;
             
-            // Gera o item Mítico (Raridade fixa)
-            const itemMitico = createItem(p.lvl); 
-            itemMitico.rarityName = "Mítico";
-            itemMitico.rarityColor = "#ff0000";
-            p.inv.push(itemMitico);
+            // Gera o item Mítico (agora sempre com os 5 atributos, não só o rótulo trocado)
+            const itemMitico = createMythicItem(p.lvl);
+            const coube = addToInventory(itemMitico);
             
-            log("VITÓRIA LENDÁRIA! O Boss caiu e deixou um rasto de ouro e um item Mítico!", "var(--gold)");
+            log("VITÓRIA LENDÁRIA! O Boss caiu e deixou um rasto de ouro" + (coube ? " e um item Mítico!" : "!"), "var(--gold)");
             checkLvl();
         }
 
@@ -410,7 +450,10 @@
 
     function refreshShop() { p.shopItems = [createItem(p.lvl), createItem(p.lvl)]; }
 
-    function buyPotion() { if (p.gold >= 20) { p.gold -= 20; p.inv.push({name: "Poção", type: 'consumable'}); updateUI(); } }
+    function buyPotion() {
+        if (p.inv.length >= INV_CAPACITY) { log("Mochila cheia! Vende algo antes de comprar.", "var(--btn-red)"); return; }
+        if (p.gold >= 20) { p.gold -= 20; addToInventory({name: "Poção", type: 'consumable'}); updateUI(); }
+    }
 
     function updateUI() {
         document.getElementById('display-class').innerText = p.class || "...";
@@ -547,7 +590,11 @@
 
     function addAttr(type) { if (p.points > 0) { p.points--; if (type === 'vit') { p.maxHp += 20; p.hp += 20; } else p[type] += 2; updateUI(); } }
     function checkLvl() { if (p.xp >= p.nextLvl) { p.lvl++; p.xp -= p.nextLvl; p.nextLvl = Math.floor(p.nextLvl * 1.5); p.points += 5; p.hp = getTotalAttr('vit'); log("LEVEL UP!"); } }
-    function buyItem(idx) { const it = p.shopItems[idx]; if (p.gold >= it.price) { p.gold -= it.price; p.inv.push(it); p.shopItems.splice(idx,1); updateUI(); } }
+    function buyItem(idx) {
+        const it = p.shopItems[idx];
+        if (p.inv.length >= INV_CAPACITY) { log("Mochila cheia! Vende algo antes de comprar.", "var(--btn-red)"); return; }
+        if (p.gold >= it.price) { p.gold -= it.price; addToInventory(it); p.shopItems.splice(idx,1); updateUI(); }
+    }
     
     function fightArena() {
         let bHp = p.arenaRank * 70, bDmg = p.arenaRank * 12;
@@ -558,11 +605,12 @@
         updateUI();
     }
 
-    function openTab(id) {
+    function openTab(id, evt) {
         document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
         document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
         document.getElementById(id).classList.add('active');
-        event.currentTarget.classList.add('active');
+        const source = evt || window.event;
+        if (source && source.currentTarget) source.currentTarget.classList.add('active');
     }
 
     function log(msg, color = "#ccc") {
@@ -570,7 +618,7 @@
         logDiv.innerHTML = `<div style="color:${color}">> ${msg}</div>` + logDiv.innerHTML;
     }
 
-    function resetGame() { if(confirm("Reset?")) { localStorage.clear(); location.reload(); } }
+    function resetGame() { if(confirm("Reset?")) { localStorage.removeItem('heroQuestFinalSave'); location.reload(); } }
     load();
 
     if ('serviceWorker' in navigator) {
