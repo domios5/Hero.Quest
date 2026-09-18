@@ -25,6 +25,8 @@
         .tag-gold { background: var(--gold); color: black; }
         .tag-xp { background: #9b59b6; color: white; }
         .tag-bal { background: #34495e; color: white; }
+        .tag-legendary { background: linear-gradient(90deg, #ff8000, #ff0000); color: white; box-shadow: 0 0 6px #ff8000; }
+        .quest-card.legendary { border-color: #ff8000; box-shadow: 0 0 10px rgba(255,128,0,0.4); }
 
         .item-card { background: #3d3d3d; border: 1px solid #555; padding: 12px; border-radius: 8px; margin-bottom: 10px; }
 
@@ -56,6 +58,20 @@
         .flash-dmg { animation: dmgFlash 0.4s ease-out; }
 
         select { padding: 6px; border-radius: 4px; background: #222; color: white; border: 1px solid #555; }
+
+        .compare-row { display:flex; justify-content:space-between; font-size:0.8em; padding:2px 0; }
+        .compare-up { color: #4caf50; }
+        .compare-down { color: #e74c3c; }
+
+        .achv-card { background: #3d3d3d; border: 1px solid #555; padding: 10px; border-radius: 8px; margin-bottom: 8px; opacity: 0.5; }
+        .achv-card.done { opacity: 1; border-color: var(--gold); }
+        .achv-title { font-weight: bold; }
+        .achv-title.done { color: var(--gold); }
+
+        .stat-row { display:flex; justify-content:space-between; background:#444; padding:8px 10px; border-radius:4px; margin-bottom:6px; font-size:0.85em; }
+
+        #top-bar-extra { display:flex; justify-content:flex-end; gap:6px; margin-bottom:8px; }
+        #top-bar-extra button { width:auto; padding:4px 8px; font-size:0.75em; margin-top:0; background:#444; }
     </style>
 
     <link rel="manifest" href="manifest.json">
@@ -71,6 +87,11 @@
         <div class="class-card" onclick="initClass('Guerreiro')">🛡️ Guerreiro (Dano: Força | HP Alto)</div>
         <div class="class-card" onclick="initClass('Assassino')">🗡️ Assassino (Dano: Destreza | Gold Bonus)</div>
         <div class="class-card" onclick="initClass('Mago')">✨ Mago (Dano: Inteligência | XP Bonus)</div>
+    </div>
+
+    <div id="top-bar-extra">
+        <button id="btn-install" onclick="installApp()" style="display:none;">📲 Instalar</button>
+        <button id="btn-sound" onclick="toggleSound()">🔊</button>
     </div>
 
     <div style="text-align: center; margin-bottom: 10px;">
@@ -93,6 +114,7 @@
         <button class="tab-btn" onclick="openTab('inv', event)">Mochila</button>
         <button class="tab-btn" onclick="openTab('shop', event)">Loja</button>
         <button class="tab-btn" onclick="openTab('arena', event)">Arena</button>
+        <button class="tab-btn" onclick="openTab('profile', event)">Perfil</button>
     </div>
 
     <div id="quests" class="tab-content active">
@@ -174,6 +196,23 @@
         </div>
     </div>
 
+    <div id="profile" class="tab-content">
+        <h4>Sequência Diária</h4>
+        <div class="stat-row"><span>Sequência atual</span><b id="stat-streak">0 dias</b></div>
+
+        <h4>Estatísticas</h4>
+        <div class="stat-row"><span>Missões completas</span><b id="stat-quests">0</b></div>
+        <div class="stat-row"><span>Vitórias na Arena</span><b id="stat-arena">0</b></div>
+        <div class="stat-row"><span>Bosses derrotados</span><b id="stat-bosses">0</b></div>
+        <div class="stat-row"><span>Itens encontrados</span><b id="stat-items">0</b></div>
+        <div class="stat-row"><span>Itens encantados</span><b id="stat-enchants">0</b></div>
+        <div class="stat-row"><span>Ouro total ganho</span><b id="stat-gold">0</b></div>
+        <div class="stat-row"><span>XP total ganho</span><b id="stat-xp">0</b></div>
+
+        <h4>Conquistas</h4>
+        <div id="achv-list"></div>
+    </div>
+
     <div id="progress-container"><div id="progress-bar"></div></div>
     <div class="log" id="game-log"></div>
     <div style="display:flex; gap:5px; margin-top:10px;">
@@ -207,7 +246,12 @@
         },
         ability: { lastUsed: 0 },
         prestige: 0,
-        buffs: { dmgBoostNext: false }
+        buffs: { dmgBoostNext: false },
+        lastActiveAt: 0,
+        lastLoginDay: null, // string "YYYY-MM-DD" do último dia em que o jogo foi aberto
+        loginStreak: 0,
+        stats: { questsDone: 0, arenaWins: 0, bossesKilled: 0, itemsFound: 0, enchantsDone: 0, goldEarned: 0, xpEarned: 0 },
+        achievements: {}
     };
 
     let invSortMode = 'none'; // não é guardado, reinicia a cada carregamento
@@ -241,6 +285,25 @@
         MITICO:    { name: "Mítico", color: "#ff0000", chance: 0.01, slots: 5 }
     };
 
+    // Cada conquista: condição sobre o estado atual e recompensa dada uma única vez ao desbloquear.
+    const ACHIEVEMENTS = [
+        { id: 'first_quest', name: 'Primeiros Passos', desc: 'Completa 1 missão.', cond: () => p.stats.questsDone >= 1, reward: { gold: 20 } },
+        { id: 'quests_25', name: 'Aventureiro Dedicado', desc: 'Completa 25 missões.', cond: () => p.stats.questsDone >= 25, reward: { gold: 150 } },
+        { id: 'quests_100', name: 'Lenda da Taberna', desc: 'Completa 100 missões.', cond: () => p.stats.questsDone >= 100, reward: { gold: 500, points: 5 } },
+        { id: 'arena_10', name: 'Gladiador', desc: 'Vence 10 combates na Arena.', cond: () => p.stats.arenaWins >= 10, reward: { gold: 100 } },
+        { id: 'arena_rank10', name: 'Campeão da Arena', desc: 'Chega ao Arena Rank 10.', cond: () => p.arenaRank >= 10, reward: { gold: 300, points: 3 } },
+        { id: 'first_boss', name: 'Caçador de Bosses', desc: 'Derrota o World Boss pela primeira vez.', cond: () => p.stats.bossesKilled >= 1, reward: { gold: 200 } },
+        { id: 'boss_5', name: 'Flagelo dos Titãs', desc: 'Derrota o World Boss 5 vezes.', cond: () => p.stats.bossesKilled >= 5, reward: { gold: 750, points: 5 } },
+        { id: 'lvl_10', name: 'Veterano', desc: 'Chega ao nível 10.', cond: () => p.lvl >= 10, reward: { gold: 150 } },
+        { id: 'lvl_25', name: 'Herói Consagrado', desc: 'Chega ao nível 25.', cond: () => p.lvl >= 25, reward: { gold: 500, points: 5 } },
+        { id: 'mythic_item', name: 'Sortudo', desc: 'Equipa um item Mítico.', cond: () => Object.values(p.equip).some(it => it && it.rarityName === 'Mítico'), reward: { gold: 250 } },
+        { id: 'full_gear', name: 'Bem Equipado', desc: 'Equipa item em todos os 6 slots.', cond: () => Object.values(p.equip).every(it => !!it), reward: { gold: 200 } },
+        { id: 'enchant_10', name: 'Ferreiro Arcano', desc: 'Encanta 10 itens.', cond: () => p.stats.enchantsDone >= 10, reward: { gold: 200 } },
+        { id: 'streak_7', name: 'Hábito Heróico', desc: 'Joga 7 dias seguidos.', cond: () => p.loginStreak >= 7, reward: { gold: 300 } },
+        { id: 'prestige_1', name: 'Recomeço Lendário', desc: 'Faz o teu primeiro Prestígio.', cond: () => p.prestige >= 1, reward: { gold: 100 } },
+        { id: 'gold_5000', name: 'Magnata', desc: 'Acumula 5000 de Ouro ganho ao longo do jogo.', cond: () => p.stats.goldEarned >= 5000, reward: { gold: 100 } }
+    ];
+
     // Janela de confirmação própria do jogo (evita depender do confirm() nativo do
     // browser, que alguns browsers deixam de mostrar depois de vários usos na mesma página)
     function showConfirm(message, onYes) {
@@ -259,8 +322,77 @@
         document.getElementById('confirm-no').onclick = () => { document.body.removeChild(overlay); };
     }
 
+    // Janela de aviso com um único botão "OK", para mensagens informativas (login diário, ganhos offline).
+    // onClose (opcional) corre depois de fechada, para encadear vários avisos sem se sobreporem.
+    function showNotice(title, message, onClose) {
+        const overlay = document.createElement('div');
+        overlay.style = 'position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.7); z-index:200; display:flex; align-items:center; justify-content:center;';
+        overlay.innerHTML = `
+            <div style="background:#2c2c2c; border:2px solid var(--gold); border-radius:10px; padding:20px; max-width:320px; text-align:center;">
+                <h3 style="color:var(--gold); margin-top:0;">${title}</h3>
+                <p style="margin:0 0 15px 0; white-space:pre-line;">${message}</p>
+                <button id="notice-ok" style="background:var(--btn-blue);">OK</button>
+            </div>`;
+        document.body.appendChild(overlay);
+        document.getElementById('notice-ok').onclick = () => { document.body.removeChild(overlay); if (onClose) onClose(); };
+    }
+
+    // --- Som (Web Audio API, sem ficheiros externos) ---
+    let soundMuted = localStorage.getItem('heroQuestSoundMuted') === '1';
+    let audioCtx = null;
+    function playTone(freqs, duration = 0.12) {
+        if (soundMuted) return;
+        try {
+            if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+            freqs.forEach((f, i) => {
+                const osc = audioCtx.createOscillator();
+                const gain = audioCtx.createGain();
+                osc.type = 'sine';
+                osc.frequency.value = f;
+                gain.gain.value = 0.08;
+                osc.connect(gain); gain.connect(audioCtx.destination);
+                const start = audioCtx.currentTime + i * duration;
+                osc.start(start);
+                gain.gain.exponentialRampToValueAtTime(0.001, start + duration);
+                osc.stop(start + duration);
+            });
+        } catch (e) { /* Web Audio indisponível, ignora silenciosamente */ }
+    }
+    function sfxClick() { playTone([440], 0.05); }
+    function sfxLevelUp() { playTone([523, 659, 784, 1047], 0.1); }
+    function sfxVictory() { playTone([392, 523, 659], 0.12); }
+    function sfxDefeat() { playTone([300, 200], 0.15); }
+    function sfxLoot() { playTone([660, 880], 0.08); }
+    function toggleSound() {
+        soundMuted = !soundMuted;
+        localStorage.setItem('heroQuestSoundMuted', soundMuted ? '1' : '0');
+        document.getElementById('btn-sound').innerText = soundMuted ? '🔇' : '🔊';
+        if (!soundMuted) sfxClick();
+    }
+
+    // --- Instalar como App (PWA) ---
+    let deferredInstallPrompt = null;
+    window.addEventListener('beforeinstallprompt', (e) => {
+        e.preventDefault();
+        deferredInstallPrompt = e;
+        const btn = document.getElementById('btn-install');
+        if (btn) btn.style.display = 'inline-block';
+    });
+    function installApp() {
+        if (!deferredInstallPrompt) return;
+        deferredInstallPrompt.prompt();
+        deferredInstallPrompt.userChoice.finally(() => {
+            deferredInstallPrompt = null;
+            document.getElementById('btn-install').style.display = 'none';
+        });
+    }
+    window.addEventListener('appinstalled', () => {
+        document.getElementById('btn-install').style.display = 'none';
+    });
+
     function save() {
         try {
+            p.lastActiveAt = Date.now();
             localStorage.setItem('heroQuestFinalSave', JSON.stringify(p));
         } catch (e) {
             log("Não foi possível guardar o progresso (armazenamento cheio ou bloqueado).", "var(--btn-red)");
@@ -279,7 +411,63 @@
         if (!p.buffs) p.buffs = { dmgBoostNext: false };
         if (p.shopRefreshAt === undefined) p.shopRefreshAt = 0;
         if (!Array.isArray(p.inv)) p.inv = [];
+        if (!p.stats) p.stats = { questsDone: 0, arenaWins: 0, bossesKilled: 0, itemsFound: 0, enchantsDone: 0, goldEarned: 0, xpEarned: 0 };
+        ['questsDone', 'arenaWins', 'bossesKilled', 'itemsFound', 'enchantsDone', 'goldEarned', 'xpEarned'].forEach(k => { if (p.stats[k] === undefined) p.stats[k] = 0; });
+        if (!p.achievements) p.achievements = {};
+        if (p.lastActiveAt === undefined) p.lastActiveAt = 0;
+        if (p.lastLoginDay === undefined) p.lastLoginDay = null;
+        if (p.loginStreak === undefined) p.loginStreak = 0;
         p.saveVersion = CURRENT_SAVE_VERSION;
+    }
+
+    function todayKey(d = new Date()) { return d.getFullYear() + '-' + (d.getMonth() + 1) + '-' + d.getDate(); }
+
+    // Sequência de login diário: dá ouro (mais nos dias de "marco") por abrires o jogo em dias seguidos.
+    function checkDailyLogin() {
+        const today = todayKey();
+        if (p.lastLoginDay === today) return; // já contaste hoje
+
+        const yesterday = todayKey(new Date(Date.now() - 24 * 60 * 60 * 1000));
+        if (p.lastLoginDay === yesterday) {
+            p.loginStreak++;
+        } else {
+            p.loginStreak = 1; // quebrou a sequência (ou é o primeiro dia)
+        }
+        p.lastLoginDay = today;
+
+        const bonusGold = 10 * p.loginStreak;
+        p.gold += bonusGold;
+        p.stats.goldEarned += bonusGold;
+
+        let extra = '';
+        if (p.loginStreak % 7 === 0) {
+            const item = createItem(p.lvl);
+            if (addToInventory(item)) extra = `\nBónus de 7 dias: ganhaste ${item.name}!`;
+        }
+        showNotice("Login Diário!", `Sequência: ${p.loginStreak} dia(s)\n+${bonusGold} Ouro${extra}`, updateUI);
+        save();
+    }
+
+    const OFFLINE_GOLD_CAP_MIN = 8 * 60; // no máximo 8h de ganhos offline contabilizados
+
+    // Dá uma pequena recompensa proporcional ao tempo que estiveste fora, até um máximo de 8h.
+    function checkOfflineGains() {
+        if (!p.lastActiveAt) return false;
+        const awayMs = Date.now() - p.lastActiveAt;
+        const awayMin = Math.min(OFFLINE_GOLD_CAP_MIN, Math.floor(awayMs / 60000));
+        if (awayMin < 2) return false; // não vale a pena mostrar nada para ausências curtas
+
+        const rate = 2 + p.lvl * 0.5;
+        const gold = Math.floor(awayMin * rate * getPrestigeMultiplier());
+        if (gold <= 0) return false;
+        p.gold += gold;
+        p.stats.goldEarned += gold;
+
+        const hrs = Math.floor(awayMin / 60), mins = awayMin % 60;
+        const timeStr = hrs > 0 ? `${hrs}h ${mins}min` : `${mins}min`;
+        showNotice("Bem-vindo de volta!", `Estiveste fora ${timeStr}.\nOs teus aventureiros de retaguarda renderam +${gold} Ouro.`, () => { updateUI(); checkDailyLogin(); });
+        save();
+        return true;
     }
 
     function load() {
@@ -296,6 +484,8 @@
             if (!p.currentQuests || p.currentQuests.length === 0) generateNewQuests();
             if (!p.shopItems || p.shopItems.length === 0) refreshShop();
             updateUI();
+            const showedOffline = checkOfflineGains();
+            if (!showedOffline) checkDailyLogin();
         }
     }
 
@@ -309,7 +499,11 @@
         generateNewQuests();
         refreshShop();
         updateUI();
+        checkDailyLogin(); // marca o primeiro dia da sequência
     }
+
+    const LEGENDARY_QUEST_CHANCE = 0.08; // ~1 em cada 12 gerações de missões traz uma Lendária
+    const legendaryMissionNames = ["Derrotar o Dragão Ancião", "Assaltar a Fortaleza Negra", "Recuperar a Coroa Perdida", "Selar o Portal Amaldiçoado"];
 
     // MISSÕES ALEATÓRIAS (CORRIGIDO)
     function generateNewQuests() {
@@ -328,6 +522,20 @@
                 duration: 4000
             });
         });
+
+        // De vez em quando, uma das missões normais é substituída por uma Lendária:
+        // muito mais recompensa, mas também mais tempo e mais risco de vida.
+        if (Math.random() < LEGENDARY_QUEST_CHANCE) {
+            const idx = Math.floor(Math.random() * p.currentQuests.length);
+            const base = p.currentQuests[idx];
+            p.currentQuests[idx] = {
+                name: legendaryMissionNames[Math.floor(Math.random() * legendaryMissionNames.length)],
+                type: 'legendary',
+                gold: base.gold * 4,
+                xp: base.xp * 4,
+                duration: 7000
+            };
+        }
     }
 
     function createItem(quality = 1) {
@@ -437,6 +645,20 @@
 
     function getPrestigeMultiplier() { return 1 + p.prestige * 0.05; }
 
+    // Verifica todas as conquistas ainda não desbloqueadas e dá a recompensa uma única vez.
+    function checkAchievements() {
+        ACHIEVEMENTS.forEach(a => {
+            if (p.achievements[a.id]) return;
+            if (!a.cond()) return;
+            p.achievements[a.id] = true;
+            let rewardTxt = [];
+            if (a.reward.gold) { p.gold += a.reward.gold; p.stats.goldEarned += a.reward.gold; rewardTxt.push(`+${a.reward.gold} Ouro`); }
+            if (a.reward.points) { p.points += a.reward.points; rewardTxt.push(`+${a.reward.points} Pontos`); }
+            log(`CONQUISTA: ${a.name}! ${rewardTxt.join(', ')}`, "var(--gold)");
+            sfxLevelUp();
+        });
+    }
+
     function doPrestige() {
         if (p.lvl < PRESTIGE_LEVEL_REQ) return;
         showConfirm(`Fazer Prestígio? Perdes nível, XP, Ouro e atributos base, mas ganhas +5% de Ouro/XP permanente (atual: +${p.prestige * 5}% -> +${(p.prestige + 1) * 5}%). Equipamento e mochila mantêm-se.`, () => {
@@ -493,7 +715,9 @@
             const k = keys[Math.floor(Math.random() * keys.length)];
             const boost = Math.floor(Math.random() * 3) + 1;
             item.bonuses[k] += boost;
+            p.stats.enchantsDone++;
             log(`${item.name} encantado! +${boost} ${(attrNames[k] || k.toUpperCase())}.`, "var(--accent)");
+            sfxLoot();
             document.getElementById('item-actions').style.display = 'none';
             updateUI();
         });
@@ -536,26 +760,34 @@
     }
 
     function completeQuest(q) {
+        const isLegendary = q.type === 'legendary';
+
         // 1. Cálculo de bónus de Ouro e XP (com multiplicador de Prestígio)
         let fG = Math.floor(q.gold * (1 + getTotalAttr('dex') / 100) * getPrestigeMultiplier());
         let fX = Math.floor(q.xp * (1 + getTotalAttr('int') / 100) * getPrestigeMultiplier());
         p.gold += fG; p.xp += fX;
+        p.stats.goldEarned += fG; p.stats.xpEarned += fX;
 
-        // 2. ADICIONAR PERDA DE VIDA (1 a 10)
+        // 2. ADICIONAR PERDA DE VIDA (1 a 10, o dobro nas missões Lendárias)
         let damageTaken = Math.floor(Math.random() * 10) + 1;
+        if (isLegendary) damageTaken *= 2;
         p.hp -= damageTaken;
         flashDamage();
 
         // Garantir que o HP não fica negativo ou abaixo de 1 (para não morrer em missões)
         if (p.hp < 1) p.hp = 1;
 
-        log(`Missão feita: +${fG} Ouro, +${fX} XP. Perdeste ${damageTaken} HP.`);
+        p.stats.questsDone++;
+        log(`Missão feita: +${fG} Ouro, +${fX} XP. Perdeste ${damageTaken} HP.`, isLegendary ? "var(--gold)" : "#ccc");
+        if (isLegendary) sfxVictory(); else sfxClick();
 
-        // 3. Sistema de Loot (restante código que já tens)
-        if (Math.random() < 0.15) {
+        // 3. Sistema de Loot (chance maior nas missões Lendárias)
+        if (Math.random() < (isLegendary ? 0.5 : 0.15)) {
             const item = createItem(p.lvl);
             if (addToInventory(item)) {
+                p.stats.itemsFound++;
                 log(`LOOT: Encontraste ${item.name}!`, "var(--accent)");
+                sfxLoot();
             }
         }
 
@@ -671,14 +903,19 @@
             p.boss.nextSpawn = Date.now() + (3 * 24 * 60 * 60 * 1000); // 3 dias
 
             // Recompensas (com multiplicador de Prestígio)
-            p.gold += Math.floor(p.lvl * 500 * getPrestigeMultiplier());
-            p.xp += Math.floor(p.lvl * 1000 * getPrestigeMultiplier());
+            const gEarn = Math.floor(p.lvl * 500 * getPrestigeMultiplier());
+            const xEarn = Math.floor(p.lvl * 1000 * getPrestigeMultiplier());
+            p.gold += gEarn; p.xp += xEarn;
+            p.stats.goldEarned += gEarn; p.stats.xpEarned += xEarn;
+            p.stats.bossesKilled++;
 
             // Gera o item Mítico (agora sempre com os 5 atributos, não só o rótulo trocado)
             const itemMitico = createMythicItem(p.lvl);
             const coube = addToInventory(itemMitico);
+            if (coube) p.stats.itemsFound++;
 
             log("VITÓRIA LENDÁRIA! O Boss caiu e deixou um rasto de ouro" + (coube ? " e um item Mítico!" : "!"), "var(--gold)");
+            sfxVictory();
             checkLvl();
         }
 
@@ -716,6 +953,31 @@
         p.gold -= pot.price;
         addToInventory({ name: pot.name, type: 'consumable', effect: pot.effect, amount: pot.amount });
         updateUI();
+    }
+
+    // Preço de venda: antes era sempre 15 de Ouro para qualquer item, ignorando a raridade.
+    // Agora escala com o valor de compra do item (equipamento) ou é um valor fixo pequeno (consumíveis).
+    function getSellPrice(item) {
+        if (item.type === 'consumable') return 8;
+        const base = item.price || 20;
+        return Math.max(5, Math.floor(base * 0.4));
+    }
+
+    // Compara um item candidato com o que já está equipado nesse slot, para mostrar as diferenças
+    // de atributos antes de o jogador decidir equipar (evita trocas às cegas).
+    function compareItems(newItem, oldItem) {
+        const keys = ['str', 'vit', 'dex', 'int', 'luk'];
+        let rows = '';
+        keys.forEach(k => {
+            const nv = (newItem.bonuses && newItem.bonuses[k]) || 0;
+            const ov = (oldItem && oldItem.bonuses && oldItem.bonuses[k]) || 0;
+            if (nv === 0 && ov === 0) return;
+            const diff = nv - ov;
+            const cls = diff > 0 ? 'compare-up' : diff < 0 ? 'compare-down' : '';
+            const sign = diff > 0 ? '+' : '';
+            rows += `<div class="compare-row"><span>${attrNames[k]}</span><span class="${cls}">${nv} (${sign}${diff})</span></div>`;
+        });
+        return rows || '<div class="compare-row"><span style="color:#888;">Sem atributos para comparar</span></div>';
     }
 
     function buildItemTooltip(item) {
@@ -782,16 +1044,18 @@
 
         p.currentQuests.forEach((q, i) => {
             const isLowHP = p.hp <= 1; // Verifica se a vida está no limite
-            const tClass = q.type === 'gold' ? 'tag-gold' : q.type === 'xp' ? 'tag-xp' : 'tag-bal';
+            const isLegendary = q.type === 'legendary';
+            const tClass = q.type === 'gold' ? 'tag-gold' : q.type === 'xp' ? 'tag-xp' : isLegendary ? 'tag-legendary' : 'tag-bal';
+            const tLabel = isLegendary ? 'lendária' : q.type;
 
             // Configuração do botão baseada no HP
             const btnStyle = isLowHP ? 'style="background:#555; cursor:not-allowed;"' : '';
             const btnText = isLowHP ? 'Ferido!' : 'Ir';
 
             const div = document.createElement('div');
-            div.className = 'quest-card';
+            div.className = 'quest-card' + (isLegendary ? ' legendary' : '');
             div.innerHTML = `
-                <span class="tag ${tClass}">${q.type}</span><br>
+                <span class="tag ${tClass}">${tLabel}</span><br>
                 <b>${q.name}</b><br>
                 <small>${q.gold} G | ${q.xp} XP</small>
                 <button class="q-btn" onclick="startQuest(${i})" ${btnStyle}>
@@ -879,6 +1143,26 @@
             bossArea.style.display = 'none';
         }
 
+        // Perfil: estatísticas e conquistas
+        checkAchievements();
+        document.getElementById('stat-streak').innerText = `${p.loginStreak} dia(s)`;
+        document.getElementById('stat-quests').innerText = p.stats.questsDone;
+        document.getElementById('stat-arena').innerText = p.stats.arenaWins;
+        document.getElementById('stat-bosses').innerText = p.stats.bossesKilled;
+        document.getElementById('stat-items').innerText = p.stats.itemsFound;
+        document.getElementById('stat-enchants').innerText = p.stats.enchantsDone;
+        document.getElementById('stat-gold').innerText = p.stats.goldEarned;
+        document.getElementById('stat-xp').innerText = p.stats.xpEarned;
+
+        const achvL = document.getElementById('achv-list'); achvL.innerHTML = '';
+        ACHIEVEMENTS.forEach(a => {
+            const done = !!p.achievements[a.id];
+            const div = document.createElement('div');
+            div.className = 'achv-card' + (done ? ' done' : '');
+            div.innerHTML = `<div class="achv-title${done ? ' done' : ''}">${done ? '✓ ' : ''}${a.name}</div><small>${a.desc}</small>`;
+            achvL.appendChild(div);
+        });
+
         // Loja
         checkShopRefresh();
 
@@ -929,7 +1213,16 @@
             btn.innerText = "Equipar"; btn.onclick = () => {
                 const t = item.type; if (p.equip[t]) p.inv.push(p.equip[t]);
                 p.equip[t] = item; p.inv.splice(idx, 1); updateUI(); area.style.display = 'none';
+                sfxClick();
             };
+
+            // Comparação com o item já equipado nesse slot, antes de decidires trocar
+            const currentEquipped = p.equip[item.type];
+            const compareHtml = `<div style="margin-top:8px; background:#333; padding:6px 10px; border-radius:5px;">
+                <small style="color:#aaa;">${currentEquipped ? `Vs. ${currentEquipped.name} equipado:` : 'Slot vazio atualmente:'}</small>
+                ${compareItems(item, currentEquipped)}
+            </div>`;
+            document.getElementById('action-info').innerHTML += compareHtml;
 
             if (item.bonuses && Object.keys(item.bonuses).length > 0) {
                 const cost = 50 * Object.keys(item.bonuses).length;
@@ -940,15 +1233,18 @@
                 enchantBtn.style.display = 'none';
             }
         }
+        const sellPrice = getSellPrice(item);
+        document.getElementById('btn-sell').innerText = `Vender (${sellPrice}G)`;
         document.getElementById('btn-sell').onclick = () => {
-            showConfirm(`Vender ${item.name} por 15 Ouro?`, () => {
-                p.gold += 15; p.inv.splice(idx, 1); area.style.display = 'none'; updateUI();
+            showConfirm(`Vender ${item.name} por ${sellPrice} Ouro?`, () => {
+                p.gold += sellPrice; p.inv.splice(idx, 1); area.style.display = 'none'; updateUI();
+                sfxClick();
             });
         };
     }
 
     function addAttr(type) { if (p.points > 0) { p.points--; if (type === 'vit') { p.maxHp += 20; p.hp += 20; } else p[type] += 2; updateUI(); } }
-    function checkLvl() { if (p.xp >= p.nextLvl) { p.lvl++; p.xp -= p.nextLvl; p.nextLvl = Math.floor(p.nextLvl * 1.5); p.points += 5; p.hp = getTotalAttr('vit'); log("LEVEL UP!"); } }
+    function checkLvl() { if (p.xp >= p.nextLvl) { p.lvl++; p.xp -= p.nextLvl; p.nextLvl = Math.floor(p.nextLvl * 1.5); p.points += 5; p.hp = getTotalAttr('vit'); log("LEVEL UP!"); sfxLevelUp(); } }
 
     function fightArena() {
         const enemyName = ARENA_ENEMIES[Math.floor(Math.random() * ARENA_ENEMIES.length)];
@@ -963,11 +1259,15 @@
         while (p.hp > 0 && bHp > 0) { bHp -= pDmg; if (bHp > 0) p.hp -= bDmg; }
         if (bHp <= 0) {
             log(`VITÓRIA contra ${enemyName}!`);
-            p.gold += Math.floor(p.arenaRank * 100 * getPrestigeMultiplier());
-            p.xp += Math.floor(p.arenaRank * 50 * getPrestigeMultiplier());
+            const gEarn = Math.floor(p.arenaRank * 100 * getPrestigeMultiplier());
+            const xEarn = Math.floor(p.arenaRank * 50 * getPrestigeMultiplier());
+            p.gold += gEarn; p.xp += xEarn;
+            p.stats.goldEarned += gEarn; p.stats.xpEarned += xEarn;
+            p.stats.arenaWins++;
             p.arenaRank++; checkLvl();
+            sfxVictory();
         }
-        else { p.hp = 1; flashDamage(); log(`DERROTA contra ${enemyName}!`); }
+        else { p.hp = 1; flashDamage(); log(`DERROTA contra ${enemyName}!`); sfxDefeat(); }
         updateUI();
     }
 
@@ -1073,6 +1373,8 @@
     }
 
     setInterval(() => { if (p.class) tickTimers(); }, 1000);
+
+    document.getElementById('btn-sound').innerText = soundMuted ? '🔇' : '🔊';
 
     load();
 
