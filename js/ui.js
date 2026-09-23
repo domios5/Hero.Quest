@@ -266,8 +266,14 @@
         save();
     }
 
+    // Fecha o modal de ações do item (Equipar/Usar, Encantar, Vender), aberto por showActions().
+    function closeItemActions() {
+        const overlay = document.getElementById('item-actions-overlay');
+        if (overlay) overlay.style.display = 'none';
+    }
+
     function showActions(item, idx) {
-        const area = document.getElementById('item-actions'); area.style.display = 'block';
+        const overlay = document.getElementById('item-actions-overlay'); overlay.style.display = 'flex';
         document.getElementById('action-info').innerHTML = item.unique
             ? `<b style="color:${item.rarityColor};">✨ ${item.name}</b><br><small style="color:#ccc; font-style:italic;">"${item.lore}"</small>`
             : `<b>${item.name}</b>`;
@@ -289,12 +295,12 @@
                     p.hp = Math.min(getTotalAttr('vit'), p.hp + amount);
                     log(`Recuperaste ${amount} HP.`, "var(--accent)");
                 }
-                p.inv.splice(idx, 1); updateUI(); area.style.display = 'none';
+                p.inv.splice(idx, 1); updateUI(); closeItemActions();
             };
         } else {
             btn.innerText = "Equipar"; btn.onclick = () => {
                 const t = item.type; if (p.equip[t]) p.inv.push(p.equip[t]);
-                p.equip[t] = item; p.inv.splice(idx, 1); updateUI(); area.style.display = 'none';
+                p.equip[t] = item; p.inv.splice(idx, 1); updateUI(); closeItemActions();
                 sfxClick();
             };
 
@@ -326,7 +332,7 @@
             sellBtn.innerText = `Vender (${sellPrice}G)`;
             sellBtn.onclick = () => {
                 showConfirm(`Vender ${item.name} por ${sellPrice} Ouro?`, () => {
-                    p.gold += sellPrice; p.inv.splice(idx, 1); area.style.display = 'none'; updateUI();
+                    p.gold += sellPrice; p.inv.splice(idx, 1); closeItemActions(); updateUI();
                     sfxClick();
                 });
             };

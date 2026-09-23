@@ -235,7 +235,7 @@
             const boostTxt = Object.keys(gained).map(k => `+${gained[k]} ${(attrNames[k] || k.toUpperCase())}`).join(', ');
             log(`${item.name} encantado${times > 1 ? ` ${times}x` : ''}! ${boostTxt}.`, "var(--accent)");
             sfxLoot();
-            document.getElementById('item-actions').style.display = 'none';
+            closeItemActions();
             updateUI();
         });
     }
