@@ -110,7 +110,7 @@
         <div>Ouro: <span id="gold" class="highlight">0</span></div>
         <div>HP: <span id="hp-cur">0</span>/<span id="hp-max">0</span></div>
         <div>XP: <span id="xp">0</span>/<span id="nextLvl">0</span></div>
-        <div>Pontos: <span id="points" style="color: var(--gold);">0</span></div>
+        <div>Pontos Perícia: <span id="points" style="color: var(--gold);">0</span></div>
     </div>
 
     <div class="hp-bar-outer"><div class="hp-bar-inner" id="hp-bar-inner"></div></div>
@@ -145,7 +145,17 @@
             <button id="btn-ability" onclick="useAbility()" style="background:#9b59b6;">Usar Habilidade</button>
         </div>
 
+        <h4>Talento</h4>
+        <div id="talent-box" style="margin-bottom:15px;"></div>
+
+        <h4>Companion</h4>
+        <div id="companion-box" style="margin-bottom:15px;"></div>
+
+        <h4>Perícias</h4>
+        <div id="pericias-box" style="margin-bottom:15px;"></div>
+
         <h4>Atributos</h4>
+        <p style="font-size: 0.8em; color: #aaa; margin: 0 0 8px 0;">Aumenta-se com Ouro, não com Pontos de Perícia.</p>
         <div id="attr-list"></div>
 
         <div id="prestige-box" style="margin-top:15px; background:#3d2b00; border:1px solid var(--gold); padding:10px; border-radius:5px; text-align:center;">
@@ -264,7 +274,8 @@
                 attempts: 5,
                 nextSpawn: 0, // Timestamp para daqui a 3 dias
                 active: false,
-                depletedAt: 0 // Timestamp de quando as tentativas chegaram a 0, para o boss fugir depois de 1h
+                depletedAt: 0, // Timestamp de quando as tentativas chegaram a 0, para o boss fugir depois de 1h
+                shieldHitsUsed: 0 // quantos ataques já foram absorvidos pelo Escudo Arcano nesta aparição
             },
             ability: { lastUsed: 0 },
             prestige: 0,
@@ -273,7 +284,11 @@
             lastLoginDay: null, // string "YYYY-MM-DD" do último dia em que o jogo foi aberto
             loginStreak: 0,
             stats: { questsDone: 0, arenaWins: 0, bossesKilled: 0, itemsFound: 0, enchantsDone: 0, goldEarned: 0, xpEarned: 0 },
-            achievements: {}
+            achievements: {},
+            talent: { chosen: null }, // id do talento escolhido; a especialização não é gravada à parte, é sempre derivada do nível atual
+            attrPurchases: { str: 0, vit: 0, dex: 0, int: 0, luk: 0 }, // quantas vezes cada atributo já foi comprado com Ouro (define o custo da próxima compra)
+            pericias: {}, // { chave_pericia: pontos_investidos }, comprado com Pontos de Perícia (ganhos ao subir de nível)
+            companion: { type: null, xp: 0 } // xp acumulado (nunca desce); o nível é sempre derivado dele, capado ao nível do jogador
         };
     }
 
@@ -342,6 +357,350 @@
         let total = 0;
         ACHIEVEMENTS.forEach(a => { if (p.achievements[a.id]) total += ACHIEVEMENT_TIER_BONUS[a.tier] || 0; });
         return total;
+    }
+
+    // --- Árvore de Talentos ---
+    // Desbloqueia-se no nível 15 (escolhe 1 de 3), especializa-se automaticamente no nível 40
+    // (o mesmo talento fica muito mais forte — não é uma nova escolha). Cada classe tem um talento
+    // Ofensivo, um Económico/Progressão e um de Sustentação, para o padrão ser fácil de reconhecer.
+    const TALENT_UNLOCK_LEVEL = 15;
+    const TALENT_SPEC_LEVEL = 40;
+    const TALENT_RESPEC_COST = 200;
+
+    const TALENTS = {
+        'Guerreiro': [
+            { id: 'furia_implacavel', name: 'Fúria Implacável', icon: '⚔️', type: 'Ofensivo',
+              baseDesc: '+20% de dano em combate (Arena e World Boss).',
+              specDesc: '+50% de dano em combate, e recuperas 5% do dano causado como HP.' },
+            { id: 'muralha_aco', name: 'Muralha de Aço', icon: '🛡️', type: 'Defensivo',
+              baseDesc: '-15% de dano recebido na Arena e do World Boss.',
+              specDesc: '-35% de dano recebido na Arena e do World Boss.' },
+            { id: 'resistencia_inabalavel', name: 'Resistência Inabalável', icon: '💪', type: 'Sustentação',
+              baseDesc: 'Recarga da Habilidade -20%.',
+              specDesc: 'Recarga da Habilidade -50%, e a cura da Habilidade duplica.' }
+        ],
+        'Assassino': [
+            { id: 'golpe_critico', name: 'Golpe Crítico', icon: '🗡️', type: 'Ofensivo',
+              baseDesc: '15% de hipótese de dano crítico (x2) em combate.',
+              specDesc: '30% de hipótese de dano crítico (x2.5) em combate.' },
+            { id: 'mestre_ladrao', name: 'Mestre Ladrão', icon: '💰', type: 'Económico',
+              baseDesc: '+25% de Ouro ganho em missões, Arena e Boss.',
+              specDesc: '+60% de Ouro ganho, e -20% nos preços da Loja.' },
+            { id: 'passos_silenciosos', name: 'Passos Silenciosos', icon: '🥷', type: 'Sustentação',
+              baseDesc: '15% de hipótese de anular o contra-ataque da Arena/Boss.',
+              specDesc: '30% de hipótese de anular o contra-ataque, e -20% de dano nas missões.' }
+        ],
+        'Mago': [
+            { id: 'sobrecarga_arcana', name: 'Sobrecarga Arcana', icon: '🔥', type: 'Ofensivo',
+              baseDesc: '+30% de dano, mas perdes 5 HP extra sempre que atacas.',
+              specDesc: '+70% de dano, mas perdes 8 HP extra sempre que atacas.' },
+            { id: 'sabedoria_ancestral', name: 'Sabedoria Ancestral', icon: '📖', type: 'Progressão',
+              baseDesc: '+25% de XP ganho.',
+              specDesc: '+60% de XP ganho, e 10% de hipótese de subir um nível extra ao subir de nível.' },
+            { id: 'escudo_arcano', name: 'Escudo Arcano', icon: '🔮', type: 'Sustentação',
+              baseDesc: 'O 1º ataque do World Boss em cada aparição não te causa dano.',
+              specDesc: 'Os primeiros 2 ataques do World Boss em cada aparição não te causam dano.' }
+        ]
+    };
+
+    function getActiveTalent() {
+        if (!p.talent || !p.talent.chosen || p.lvl < TALENT_UNLOCK_LEVEL) return null;
+        const list = TALENTS[p.class] || [];
+        return list.find(t => t.id === p.talent.chosen) || null;
+    }
+    function hasTalent(id) { const t = getActiveTalent(); return !!t && t.id === id; }
+    function isTalentSpecialized() { return p.lvl >= TALENT_SPEC_LEVEL && !!getActiveTalent(); }
+
+    function getTalentDamageMultiplier() {
+        if (hasTalent('furia_implacavel')) return isTalentSpecialized() ? 1.5 : 1.2;
+        if (hasTalent('sobrecarga_arcana')) return isTalentSpecialized() ? 1.7 : 1.3;
+        return 1;
+    }
+    function getTalentDefenseMultiplier() { // multiplica o dano RECEBIDO
+        return hasTalent('muralha_aco') ? (isTalentSpecialized() ? 0.65 : 0.85) : 1;
+    }
+    function getTalentGoldMultiplier() {
+        return hasTalent('mestre_ladrao') ? (isTalentSpecialized() ? 1.6 : 1.25) : 1;
+    }
+    function getTalentXpMultiplier() {
+        return hasTalent('sabedoria_ancestral') ? (isTalentSpecialized() ? 1.6 : 1.25) : 1;
+    }
+    function getTalentCritChance() { return hasTalent('golpe_critico') ? (isTalentSpecialized() ? 0.30 : 0.15) : 0; }
+    function getTalentCritMult() { return isTalentSpecialized() ? 2.5 : 2.0; }
+    function getTalentDodgeChance() { return hasTalent('passos_silenciosos') ? (isTalentSpecialized() ? 0.30 : 0.15) : 0; }
+
+    // Sorte dá hipótese de crítico (até 40%, a todas as classes) e Destreza dá hipótese de esquiva
+    // (até 20%, a todas as classes) só com base nas stats normais — combinam-se com Talentos e
+    // Perícias pela fórmula de hipóteses independentes (1 - (1-A)*(1-B)), nunca as substituem.
+    function getLuckCritChance() { return Math.min(40, getTotalAttr('luk') * 0.5) / 100; }
+    function getDexDodgeChance() { return Math.min(20, getTotalAttr('dex') * 0.25) / 100; }
+
+    function getTotalCritChance() {
+        return 1 - (1 - getTalentCritChance()) * (1 - getLuckCritChance());
+    }
+    // Multiplicador do crítico: se tiveres o talento Golpe Crítico mantém a escala atual (x2/x2.5
+    // especializado); se o crítico só vier da Sorte, é um x1.5 mais modesto.
+    function getEffectiveCritMult() {
+        return hasTalent('golpe_critico') ? getTalentCritMult() : 1.5;
+    }
+    function getTalentArcaneSelfDamage() { return hasTalent('sobrecarga_arcana') ? (isTalentSpecialized() ? 8 : 5) : 0; }
+    function getTalentAbilityCooldownMult() { return hasTalent('resistencia_inabalavel') ? (isTalentSpecialized() ? 0.5 : 0.8) : 1; }
+    function getTalentShopDiscount() { return (hasTalent('mestre_ladrao') && isTalentSpecialized()) ? 0.8 : 1; }
+    function getTalentQuestDmgMult() { return (hasTalent('passos_silenciosos') && isTalentSpecialized()) ? 0.8 : 1; }
+    function getTalentShieldHits() { return hasTalent('escudo_arcano') ? (isTalentSpecialized() ? 2 : 1) : 0; }
+
+    function chooseTalent(id) {
+        if (p.lvl < TALENT_UNLOCK_LEVEL) return;
+        const list = TALENTS[p.class] || [];
+        const t = list.find(x => x.id === id);
+        if (!t) return;
+        showConfirm(`Escolher o talento "${t.name}"? Podes trocar mais tarde por ${TALENT_RESPEC_COST} Ouro.`, () => {
+            p.talent.chosen = id;
+            log(`Talento escolhido: ${t.name}!`, "var(--gold)");
+            sfxLevelUp();
+            updateUI();
+        });
+    }
+
+    function respecTalent() {
+        if (p.gold < TALENT_RESPEC_COST) { log(`Precisas de ${TALENT_RESPEC_COST} Ouro para trocar de talento.`, "var(--btn-red)"); return; }
+        showConfirm(`Trocar de talento por ${TALENT_RESPEC_COST} Ouro? Vais escolher outra vez.`, () => {
+            p.gold -= TALENT_RESPEC_COST;
+            p.talent.chosen = null;
+            log("Talento reiniciado — escolhe um novo.", "var(--accent)");
+            updateUI();
+        });
+    }
+
+    function renderTalentBox() {
+        const box = document.getElementById('talent-box');
+        if (!box) return;
+        const list = TALENTS[p.class] || [];
+        if (p.lvl < TALENT_UNLOCK_LEVEL) {
+            box.innerHTML = `<p style="color:#888; font-size:0.85em; background:#292929; padding:10px; border-radius:5px;">🔒 Disponível a partir do nível ${TALENT_UNLOCK_LEVEL} (faltam ${TALENT_UNLOCK_LEVEL - p.lvl} níveis).</p>`;
+            return;
+        }
+        if (!p.talent.chosen) {
+            let html = `<p style="font-size:0.8em; color:#aaa;">Escolhe o teu talento (podes trocar mais tarde por ${TALENT_RESPEC_COST} Ouro):</p>`;
+            list.forEach(t => {
+                html += `<div class="item-card">
+                    <b>${t.icon} ${t.name}</b> <small style="color:#888;">(${t.type})</small><br>
+                    <small>${t.baseDesc}</small>
+                    <button onclick="chooseTalent('${t.id}')" style="background:#4caf50;">Escolher</button>
+                </div>`;
+            });
+            box.innerHTML = html;
+            return;
+        }
+        const t = list.find(x => x.id === p.talent.chosen);
+        if (!t) { box.innerHTML = ''; return; }
+        const specialized = isTalentSpecialized();
+        const desc = specialized ? t.specDesc : t.baseDesc;
+        const progressNote = specialized
+            ? '<span style="color:var(--gold);">★ Especializado</span>'
+            : `Especializa-se no nível ${TALENT_SPEC_LEVEL} (faltam ${TALENT_SPEC_LEVEL - p.lvl} níveis)`;
+        box.innerHTML = `<div class="item-card" style="border-color:var(--gold);">
+            <b>${t.icon} ${t.name}</b> <small style="color:#888;">(${t.type})</small><br>
+            <small>${desc}</small><br>
+            <small style="display:block; margin-top:4px;">${progressNote}</small>
+            <button onclick="respecTalent()" style="background:#555;">Trocar Talento (${TALENT_RESPEC_COST}G)</button>
+        </div>`;
+    }
+
+    // --- Compra de Atributos com Ouro ---
+    // Cada compra aumenta o mesmo que antes (+2 no atributo, ou +20 HP máx para Vida), mas agora
+    // custa Ouro em vez de Pontos, com custo a crescer exponencialmente por compra desse atributo
+    // neste personagem: 25 * 1.15^n (n = nº de vezes já comprado).
+    function getAttrCost(type) {
+        const n = (p.attrPurchases && p.attrPurchases[type]) || 0;
+        return Math.round(25 * Math.pow(1.15, n));
+    }
+    function buyAttr(type) {
+        const cost = getAttrCost(type);
+        if (p.gold < cost) { log(`Precisas de ${cost} Ouro para aumentar ${attrNames[type]}.`, "var(--btn-red)"); return; }
+        p.gold -= cost;
+        p.attrPurchases[type] = (p.attrPurchases[type] || 0) + 1;
+        if (type === 'vit') { p.maxHp += 20; p.hp += 20; } else p[type] += 2;
+        sfxClick();
+        updateUI();
+    }
+
+    // --- Perícias (Pontos de Perícia, ganhos ao subir de nível) ---
+    // Sistema de 8 perícias passivas, cada uma com um limite de 20 pontos investidos e um
+    // efeito percentual por ponto. Guardadas em p.pericias = { chave: pontosInvestidos }.
+    const PERICIAS = {
+        vitalidade_extra:  { name: 'Vitalidade Extra',      icon: '❤️', desc: '+1% de HP máximo por ponto',              perPoint: 1,   max: 20 },
+        poder_ofensivo:    { name: 'Poder Ofensivo',        icon: '⚔️', desc: '+1% de dano em combate por ponto',        perPoint: 1,   max: 20 },
+        fortitude:         { name: 'Fortitude',             icon: '🛡️', desc: '-1% de dano recebido por ponto',          perPoint: 1,   max: 20 },
+        regeneracao_rapida:{ name: 'Regeneração Rápida',    icon: '⏱️', desc: '-1% de duração das missões por ponto',    perPoint: 1,   max: 20 },
+        fortuna:           { name: 'Fortuna',               icon: '🍀', desc: '+1% de Ouro ganho por ponto',             perPoint: 1,   max: 20 },
+        sabedoria:         { name: 'Sabedoria',             icon: '📚', desc: '+1% de XP ganho por ponto',               perPoint: 1,   max: 20 },
+        instinto_saque:    { name: 'Instinto de Saque',     icon: '🎯', desc: '+0.5% de hipótese de loot por ponto',     perPoint: 0.5, max: 20 },
+        reflexos:          { name: 'Reflexos',              icon: '💨', desc: '+0.75% de hipótese de esquiva por ponto', perPoint: 0.75, max: 20 }
+    };
+
+    function getPericiaPoints(key) { return (p.pericias && p.pericias[key]) || 0; }
+    function getPericiaPercent(key) {
+        const info = PERICIAS[key];
+        if (!info) return 0;
+        return getPericiaPoints(key) * info.perPoint;
+    }
+    function addPericia(key) {
+        const info = PERICIAS[key];
+        if (!info) return;
+        if (p.points <= 0) { log("Não tens Pontos de Perícia disponíveis.", "var(--btn-red)"); return; }
+        const cur = getPericiaPoints(key);
+        if (cur >= info.max) { log(`${info.name} já está no máximo.`, "var(--btn-red)"); return; }
+        p.points--;
+        p.pericias[key] = cur + 1;
+        sfxClick();
+        updateUI();
+    }
+
+    // Multiplicadores/derivados de cada perícia, combinados multiplicativamente com Talentos e Companion
+    function getPericiaDamageMultiplier() { return 1 + getPericiaPercent('poder_ofensivo') / 100; }
+    function getPericiaDefenseMultiplier() { return 1 - getPericiaPercent('fortitude') / 100; } // multiplica o dano RECEBIDO
+    function getPericiaDurationMultiplier() { return 1 - getPericiaPercent('regeneracao_rapida') / 100; }
+    function getPericiaGoldMultiplier() { return 1 + getPericiaPercent('fortuna') / 100; }
+    function getPericiaXpMultiplier() { return 1 + getPericiaPercent('sabedoria') / 100; }
+    function getPericiaLootBonus() { return getPericiaPercent('instinto_saque') / 100; } // somado diretamente à hipótese de loot
+    function getPericiaDodgeBonus() { return getPericiaPercent('reflexos') / 100; }
+
+    // Combina a esquiva de Talentos (Passos Silenciosos) com a de Perícias (Reflexos) como duas
+    // hipóteses independentes: P(esquiva) = 1 - (1-A)*(1-B)
+    function getTotalDodgeChance() {
+        return 1 - (1 - getTalentDodgeChance()) * (1 - getPericiaDodgeBonus()) * (1 - getDexDodgeChance());
+    }
+
+    function renderPericiasBox() {
+        const box = document.getElementById('pericias-box');
+        if (!box) return;
+        let html = `<p style="font-size:0.8em; color:#aaa; margin:0 0 8px 0;">Pontos de Perícia disponíveis: <b style="color:var(--gold);">${p.points}</b></p>`;
+        Object.keys(PERICIAS).forEach(key => {
+            const info = PERICIAS[key];
+            const cur = getPericiaPoints(key);
+            const atMax = cur >= info.max;
+            const canBuy = p.points > 0 && !atMax;
+            const pct = (cur * info.perPoint);
+            const pctTxt = (Math.round(pct * 100) / 100).toString();
+            html += `<div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px; background:#3a3a3a; padding:6px 10px; border-radius:4px;">
+                <span title="${info.desc}">${info.icon} ${info.name}: <b>${cur}/${info.max}</b> <small style="color:#8f8;">(${pctTxt}%)</small></span>
+                <button onclick="addPericia('${key}')" ${canBuy ? '' : 'disabled'} style="width:28px; height:28px; background:${canBuy ? '#4caf50' : '#666'}; color:white; border:none; cursor:${canBuy ? 'pointer' : 'not-allowed'}; border-radius:50%; font-weight:bold;">+</button>
+            </div>`;
+        });
+        box.innerHTML = html;
+    }
+
+    // --- Companion ---
+    // Desbloqueia-se no nível 20. O nível do companion é sempre DERIVADO do XP acumulado
+    // (p.companion.xp, que nunca desce) através de uma curva própria, capado ao nível do jogador
+    // e ao nível máximo do tipo escolhido — se o XP acumulado "chegar" para mais níveis do que o
+    // jogador tem, fica em banco e é aplicado automaticamente assim que o jogador sobe de nível.
+    const COMPANION_UNLOCK_LEVEL = 20;
+    const COMPANION_RETRAIN_COST = 150;
+    const COMPANIONS = {
+        lobo:      { name: 'Lobo de Batalha', icon: '🐺', type: 'Ofensivo',  desc: '+0.4% de dano em combate por nível', perLevel: 0.4, maxLevel: 50 },
+        coruja:    { name: 'Coruja Sábia',    icon: '🦉', type: 'Utilidade', desc: '+0.5% de Ouro e XP ganhos por nível', perLevel: 0.5, maxLevel: 40 },
+        tartaruga: { name: 'Tartaruga Guardiã', icon: '🐢', type: 'Defensivo', desc: '-0.4% de dano recebido por nível', perLevel: 0.4, maxLevel: 50 }
+    };
+
+    // XP total cumulativo necessário para o companion atingir um dado nível (curva própria e simples)
+    function companionXpForLevel(lvl) { return Math.floor(25 * lvl * (lvl - 1)); }
+
+    function getCompanionLevel() {
+        if (!p.companion || !p.companion.type) return 0;
+        const info = COMPANIONS[p.companion.type];
+        const cap = Math.min(info.maxLevel, p.lvl);
+        let lvl = 1;
+        while (lvl < cap && p.companion.xp >= companionXpForLevel(lvl + 1)) lvl++;
+        return lvl;
+    }
+
+    // Chamado sempre que o jogador ganha XP (missões, arena, boss) — o companion ganha 50% dessa XP.
+    function addCompanionXp(playerXpEarned) {
+        if (!p.companion || !p.companion.type || playerXpEarned <= 0) return;
+        p.companion.xp += Math.floor(playerXpEarned * 0.5);
+    }
+
+    function getCompanionDamageMultiplier() {
+        if (!p.companion || p.companion.type !== 'lobo') return 1;
+        return 1 + (getCompanionLevel() * COMPANIONS.lobo.perLevel) / 100;
+    }
+    function getCompanionGoldMultiplier() {
+        if (!p.companion || p.companion.type !== 'coruja') return 1;
+        return 1 + (getCompanionLevel() * COMPANIONS.coruja.perLevel) / 100;
+    }
+    function getCompanionXpMultiplier() {
+        if (!p.companion || p.companion.type !== 'coruja') return 1;
+        return 1 + (getCompanionLevel() * COMPANIONS.coruja.perLevel) / 100;
+    }
+    function getCompanionDefenseMultiplier() {
+        if (!p.companion || p.companion.type !== 'tartaruga') return 1;
+        return 1 - (getCompanionLevel() * COMPANIONS.tartaruga.perLevel) / 100;
+    }
+
+    function chooseCompanion(id) {
+        if (p.lvl < COMPANION_UNLOCK_LEVEL || (p.companion && p.companion.type)) return;
+        const info = COMPANIONS[id];
+        if (!info) return;
+        showConfirm(`Escolher "${info.icon} ${info.name}" como companion?`, () => {
+            p.companion.type = id;
+            log(`Novo companion: ${info.icon} ${info.name}!`, "var(--gold)");
+            sfxLevelUp();
+            updateUI();
+        });
+    }
+
+    function retrainCompanion(id) {
+        if (!p.companion || !p.companion.type || id === p.companion.type) return;
+        const info = COMPANIONS[id];
+        if (!info) return;
+        if (p.gold < COMPANION_RETRAIN_COST) { log(`Precisas de ${COMPANION_RETRAIN_COST} Ouro para retreinar o companion.`, "var(--btn-red)"); return; }
+        showConfirm(`Retreinar o companion para "${info.icon} ${info.name}" por ${COMPANION_RETRAIN_COST} Ouro? Mantém o nível/XP acumulado, só muda o tipo.`, () => {
+            p.gold -= COMPANION_RETRAIN_COST;
+            p.companion.type = id;
+            log(`Companion retreinado para ${info.icon} ${info.name}!`, "var(--accent)");
+            sfxClick();
+            updateUI();
+        });
+    }
+
+    function renderCompanionBox() {
+        const box = document.getElementById('companion-box');
+        if (!box) return;
+        if (p.lvl < COMPANION_UNLOCK_LEVEL) {
+            box.innerHTML = `<p style="color:#888; font-size:0.85em; background:#292929; padding:10px; border-radius:5px;">🔒 Disponível a partir do nível ${COMPANION_UNLOCK_LEVEL} (faltam ${COMPANION_UNLOCK_LEVEL - p.lvl} níveis).</p>`;
+            return;
+        }
+        if (!p.companion || !p.companion.type) {
+            let html = `<p style="font-size:0.8em; color:#aaa; margin-bottom:8px;">Escolhe o teu companion:</p>`;
+            Object.keys(COMPANIONS).forEach(id => {
+                const info = COMPANIONS[id];
+                html += `<div class="item-card">
+                    <b>${info.icon} ${info.name}</b> <small style="color:#888;">(${info.type})</small><br>
+                    <small>${info.desc} (nível máx ${info.maxLevel})</small>
+                    <button onclick="chooseCompanion('${id}')" style="background:#4caf50;">Escolher</button>
+                </div>`;
+            });
+            box.innerHTML = html;
+            return;
+        }
+        const cur = COMPANIONS[p.companion.type];
+        const lvl = getCompanionLevel();
+        const effectPct = Math.round(lvl * cur.perLevel * 100) / 100;
+        let html = `<div class="item-card" style="border-color:var(--gold);">
+            <b>${cur.icon} ${cur.name}</b> <small style="color:#888;">(${cur.type})</small><br>
+            <small>Nível <b>${lvl}</b>/${Math.min(cur.maxLevel, p.lvl)} — efeito atual: <b style="color:var(--gold);">${cur.type === 'Defensivo' ? '-' : '+'}${effectPct}%</b></small>
+        </div>
+        <p style="font-size:0.75em; color:#888; margin:8px 0 6px 0;">Retreinar (mantém nível/XP, ${COMPANION_RETRAIN_COST}G):</p>
+        <div style="display:flex; flex-wrap:wrap; gap:6px;">`;
+        Object.keys(COMPANIONS).forEach(id => {
+            if (id === p.companion.type) return;
+            const info = COMPANIONS[id];
+            html += `<button onclick="retrainCompanion('${id}')" style="background:#555; font-size:0.75em; padding:4px 8px;">${info.icon} ${info.name}</button>`;
+        });
+        html += `</div>`;
+        box.innerHTML = html;
     }
 
     // Janela de confirmação própria do jogo (evita depender do confirm() nativo do
@@ -470,6 +829,7 @@
         if (!p.boss) p.boss = { hp: 0, maxHp: 0, dmg: 0, attempts: 5, nextSpawn: 0, active: false, depletedAt: 0 };
         if (p.boss.dmg === undefined) p.boss.dmg = p.lvl * 15;
         if (p.boss.depletedAt === undefined) p.boss.depletedAt = 0;
+        if (p.boss.shieldHitsUsed === undefined) p.boss.shieldHitsUsed = 0;
         if (!p.ability) p.ability = { lastUsed: 0 };
         if (p.prestige === undefined) p.prestige = 0;
         if (!p.buffs) p.buffs = { dmgBoostNext: false };
@@ -478,6 +838,13 @@
         if (!p.stats) p.stats = { questsDone: 0, arenaWins: 0, bossesKilled: 0, itemsFound: 0, enchantsDone: 0, goldEarned: 0, xpEarned: 0 };
         ['questsDone', 'arenaWins', 'bossesKilled', 'itemsFound', 'enchantsDone', 'goldEarned', 'xpEarned'].forEach(k => { if (p.stats[k] === undefined) p.stats[k] = 0; });
         if (!p.achievements) p.achievements = {};
+        if (!p.talent) p.talent = { chosen: null };
+        if (!p.attrPurchases) p.attrPurchases = { str: 0, vit: 0, dex: 0, int: 0, luk: 0 };
+        ['str', 'vit', 'dex', 'int', 'luk'].forEach(k => { if (p.attrPurchases[k] === undefined) p.attrPurchases[k] = 0; });
+        if (!p.pericias) p.pericias = {};
+        if (!p.companion) p.companion = { type: null, xp: 0 };
+        if (p.companion.type === undefined) p.companion.type = null;
+        if (p.companion.xp === undefined) p.companion.xp = 0;
         if (p.lastActiveAt === undefined) p.lastActiveAt = 0;
         if (p.lastLoginDay === undefined) p.lastLoginDay = null;
         if (p.loginStreak === undefined) p.loginStreak = 0;
@@ -671,7 +1038,7 @@
                 type: type,
                 gold: Math.floor(g * (1 + p.lvl * 0.2)),
                 xp: Math.floor(x * (1 + p.lvl * 0.2)),
-                duration: 4000
+                duration: Math.max(500, Math.floor(4000 * getPericiaDurationMultiplier()))
             });
         });
 
@@ -685,7 +1052,7 @@
                 type: 'legendary',
                 gold: base.gold * 4,
                 xp: base.xp * 4,
-                duration: 7000
+                duration: Math.max(1000, Math.floor(7000 * getPericiaDurationMultiplier()))
             };
         }
     }
@@ -820,6 +1187,7 @@
             const cls = p.class;
             p.lvl = 1; p.xp = 0; p.nextLvl = 100; p.points = 0; p.gold = 50; p.arenaRank = 1;
             p.str = 5; p.dex = 5; p.int = 5; p.luk = 1;
+            p.attrPurchases = { str: 0, vit: 0, dex: 0, int: 0, luk: 0 }; // custo de compra de atributos volta ao início, já que os atributos base foram reiniciados
             if (cls === 'Guerreiro') { p.maxHp = 150; p.str = 15; }
             else if (cls === 'Assassino') { p.maxHp = 100; p.dex = 15; }
             else if (cls === 'Mago') { p.maxHp = 70; p.int = 20; }
@@ -833,15 +1201,22 @@
         });
     }
 
+    // Duração efetiva da recarga, já com o desconto da Resistência Inabalável (Guerreiro)
+    function getEffectiveAbilityCooldown() {
+        const ab = ABILITIES[p.class];
+        return ab ? Math.floor(ab.cooldown * getTalentAbilityCooldownMult()) : 0;
+    }
+
     function useAbility() {
         const ab = ABILITIES[p.class];
         if (!ab) return;
         const now = Date.now();
-        const remain = (p.ability.lastUsed + ab.cooldown) - now;
+        const remain = (p.ability.lastUsed + getEffectiveAbilityCooldown()) - now;
         if (remain > 0) { log(`Habilidade ainda em recarga (${Math.ceil(remain / 1000)}s).`, "var(--btn-red)"); return; }
 
         if (p.class === 'Guerreiro') {
-            const heal = Math.floor(getTotalAttr('vit') * 0.5);
+            let heal = Math.floor(getTotalAttr('vit') * 0.5);
+            if (hasTalent('resistencia_inabalavel') && isTalentSpecialized()) heal *= 2;
             p.hp = Math.min(getTotalAttr('vit'), p.hp + heal);
             log(`${ab.name}! Recuperaste ${heal} de HP.`, "var(--accent)");
         } else if (p.class === 'Assassino') {
@@ -916,15 +1291,18 @@
     function completeQuest(q) {
         const isLegendary = q.type === 'legendary';
 
-        // 1. Cálculo de bónus de Ouro e XP (com multiplicador de Prestígio)
-        let fG = Math.floor(q.gold * (1 + getTotalAttr('dex') / 100) * getPrestigeMultiplier());
-        let fX = Math.floor(q.xp * (1 + getTotalAttr('int') / 100) * getPrestigeMultiplier());
+        // 1. Cálculo de bónus de Ouro e XP (com multiplicador de Prestígio, Talento, Perícias e Companion)
+        let fG = Math.floor(q.gold * (1 + getTotalAttr('dex') / 100) * getPrestigeMultiplier() * getTalentGoldMultiplier() * getPericiaGoldMultiplier() * getCompanionGoldMultiplier());
+        let fX = Math.floor(q.xp * (1 + getTotalAttr('int') / 100) * getPrestigeMultiplier() * getTalentXpMultiplier() * getPericiaXpMultiplier() * getCompanionXpMultiplier());
         p.gold += fG; p.xp += fX;
         p.stats.goldEarned += fG; p.stats.xpEarned += fX;
+        addCompanionXp(fX);
 
-        // 2. ADICIONAR PERDA DE VIDA (1 a 10, o dobro nas missões Lendárias)
+        // 2. ADICIONAR PERDA DE VIDA (1 a 10, o dobro nas missões Lendárias, reduzida por Passos Silenciosos especializado, Fortitude e Tartaruga Guardiã)
         let damageTaken = Math.floor(Math.random() * 10) + 1;
         if (isLegendary) damageTaken *= 2;
+        damageTaken = Math.floor(damageTaken * getTalentQuestDmgMult() * getPericiaDefenseMultiplier() * getCompanionDefenseMultiplier());
+        if (damageTaken < 0) damageTaken = 0;
         p.hp -= damageTaken;
         flashDamage();
 
@@ -935,8 +1313,8 @@
         log(`Missão feita: +${fG} Ouro, +${fX} XP. Perdeste ${damageTaken} HP.`, isLegendary ? "var(--gold)" : "#ccc");
         if (isLegendary) sfxVictory(); else sfxClick();
 
-        // 3. Sistema de Loot (chance maior nas missões Lendárias)
-        if (Math.random() < (isLegendary ? 0.5 : 0.15)) {
+        // 3. Sistema de Loot (chance maior nas missões Lendárias, + bónus de Instinto de Saque)
+        if (Math.random() < (isLegendary ? 0.5 : 0.15) + getPericiaLootBonus()) {
             const item = createItem(p.lvl);
             if (addToInventory(item)) {
                 p.stats.itemsFound++;
@@ -961,6 +1339,11 @@
                 base += item.bonuses[type];
             }
         });
+
+        if (type === 'vit') {
+            base = Math.round(base * (1 + getPericiaPercent('vitalidade_extra') / 100));
+        }
+
         return base;
     }
 
@@ -975,6 +1358,7 @@
             p.boss.attempts = 5;
             p.boss.active = true;
             p.boss.depletedAt = 0;
+            p.boss.shieldHitsUsed = 0; // reinicia o Escudo Arcano (Mago) para esta nova aparição
             log("UM BOSS MÍTICO APARECEU!", "var(--gold)");
         }
     }
@@ -1026,19 +1410,63 @@
             log("Elixir de Fúria ativo! +50% de dano.", "var(--accent)");
         }
 
+        // Talentos: dano ofensivo (Fúria Implacável / Sobrecarga Arcana)
+        playerDamage = Math.floor(playerDamage * getTalentDamageMultiplier());
+        // Perícias: Poder Ofensivo, e Companion: Lobo de Batalha
+        playerDamage = Math.floor(playerDamage * getPericiaDamageMultiplier() * getCompanionDamageMultiplier());
+        // Crítico: Talento Golpe Crítico + hipótese base da Sorte
+        const isCrit = Math.random() < getTotalCritChance();
+        if (isCrit) {
+            playerDamage = Math.floor(playerDamage * getEffectiveCritMult());
+            log("Golpe Crítico!", "var(--gold)");
+        }
+
         // 3. Calcular Dano do Boss (O contra-ataque)
         // O dano do Boss é fixo por combate (definido quando ele nasce) e escala com o nível DELE,
         // não com a tua vida/equipamento — antes, ter mais vida fazia o boss bater mais forte.
         let bossDamage = p.boss.dmg || (p.lvl * 15);
 
+        // Talentos: dano recebido reduzido (Muralha de Aço)
+        bossDamage = Math.floor(bossDamage * getTalentDefenseMultiplier());
+        // Perícias: Fortitude, e Companion: Tartaruga Guardiã
+        bossDamage = Math.max(0, Math.floor(bossDamage * getPericiaDefenseMultiplier() * getCompanionDefenseMultiplier()));
+
+        // Talentos: Escudo Arcano — absorve os primeiros N ataques do Boss em cada aparição
+        const shieldHits = getTalentShieldHits();
+        let shieldBlocked = false;
+        if (shieldHits > 0 && (p.boss.shieldHitsUsed || 0) < shieldHits) {
+            p.boss.shieldHitsUsed = (p.boss.shieldHitsUsed || 0) + 1;
+            bossDamage = 0;
+            shieldBlocked = true;
+        }
+
+        // Talentos: esquiva total ao contra-ataque (Passos Silenciosos)
+        let dodged = false;
+        if (!shieldBlocked && Math.random() < getTotalDodgeChance()) {
+            bossDamage = 0;
+            dodged = true;
+        }
+
+        // Talentos: custo de vida da Sobrecarga Arcana
+        const arcaneSelfDmg = getTalentArcaneSelfDamage();
+
         // Aplicar danos
         p.boss.hp -= playerDamage;
         p.hp -= bossDamage;
+        if (arcaneSelfDmg > 0) p.hp -= arcaneSelfDmg;
         p.boss.attempts--;
         flashDamage();
 
         log(`Ataque feroz! Causaste ${playerDamage} de dano.`, "var(--accent)");
-        log(`O Boss contra-atacou! Perdeste ${bossDamage} de HP.`, "var(--btn-red)");
+        if (shieldBlocked) log("O Escudo Arcano absorveu o contra-ataque do Boss!", "var(--accent)");
+        else if (dodged) log("Esquivaste-te do contra-ataque do Boss!", "var(--accent)");
+        else log(`O Boss contra-atacou! Perdeste ${bossDamage} de HP.`, "var(--btn-red)");
+
+        // Talentos: lifesteal da Fúria Implacável especializada
+        if (hasTalent('furia_implacavel') && isTalentSpecialized() && playerDamage > 0 && p.hp > 0) {
+            const heal = Math.floor(playerDamage * 0.05);
+            if (heal > 0) { p.hp = Math.min(getTotalAttr('vit'), p.hp + heal); log(`Fúria Implacável drena ${heal} HP do Boss!`, "var(--accent)"); }
+        }
 
         // 4. Verificação de Morte do Jogador
         if (p.hp <= 0) {
@@ -1058,11 +1486,12 @@
             p.boss.depletedAt = 0;
             p.boss.nextSpawn = Date.now() + (3 * 24 * 60 * 60 * 1000); // 3 dias
 
-            // Recompensas (com multiplicador de Prestígio)
-            const gEarn = Math.floor(p.lvl * 500 * getPrestigeMultiplier());
-            const xEarn = Math.floor(p.lvl * 1000 * getPrestigeMultiplier());
+            // Recompensas (com multiplicador de Prestígio, Talento, Perícias e Companion)
+            const gEarn = Math.floor(p.lvl * 500 * getPrestigeMultiplier() * getTalentGoldMultiplier() * getPericiaGoldMultiplier() * getCompanionGoldMultiplier());
+            const xEarn = Math.floor(p.lvl * 1000 * getPrestigeMultiplier() * getTalentXpMultiplier() * getPericiaXpMultiplier() * getCompanionXpMultiplier());
             p.gold += gEarn; p.xp += xEarn;
             p.stats.goldEarned += gEarn; p.stats.xpEarned += xEarn;
+            addCompanionXp(xEarn);
             p.stats.bossesKilled++;
 
             // Gera o item Mítico (agora sempre com os 5 atributos, não só o rótulo trocado)
@@ -1095,10 +1524,13 @@
         updateUI();
     }
 
+    function getShopPrice(basePrice) { return Math.max(1, Math.floor(basePrice * getTalentShopDiscount())); }
+
     function buyItem(idx) {
         const it = p.shopItems[idx];
+        const price = getShopPrice(it.price);
         if (p.inv.length >= INV_CAPACITY) { log("Mochila cheia! Vende algo antes de comprar.", "var(--btn-red)"); return; }
-        if (p.gold >= it.price) { p.gold -= it.price; addToInventory(it); p.shopItems.splice(idx, 1); updateUI(); }
+        if (p.gold >= price) { p.gold -= price; addToInventory(it); p.shopItems.splice(idx, 1); updateUI(); }
     }
 
     function buyPotionById(id) {
@@ -1244,6 +1676,15 @@
         const abInfo = ABILITIES[p.class];
         if (abInfo) document.getElementById('ability-desc').innerHTML = `<b>${abInfo.name}</b>: ${abInfo.desc}`;
 
+        // Talento
+        renderTalentBox();
+
+        // Companion
+        renderCompanionBox();
+
+        // Perícias
+        renderPericiasBox();
+
         // Prestígio
         document.getElementById('prestige-lvl').innerText = p.prestige;
         document.getElementById('prestige-bonus').innerText = p.prestige * 5;
@@ -1261,8 +1702,11 @@
             const row = document.createElement('div');
             row.className = "attr-row";
             row.style = "display:flex; justify-content:space-between; align-items:center; margin-bottom:8px; background:#444; padding:8px 10px; border-radius:4px;";
+            const cost = getAttrCost(a);
+            const canAfford = p.gold >= cost;
             row.innerHTML = `<span>${attrNames[a]}: <b>${getTotalAttr(a)}</b></span>
-                 <button class="plus-btn" onclick="addAttr('${a}')" style="width:28px; height:28px; background:#4caf50; color:white; border:none; cursor:pointer; border-radius:50%; font-weight:bold;">+</button>`;            attrList.appendChild(row);
+                 <button class="plus-btn" onclick="buyAttr('${a}')" ${canAfford ? '' : 'disabled'} title="Comprar +${a === 'vit' ? '20 HP máx' : '2'}" style="min-width:56px; height:28px; background:${canAfford ? '#c98a00' : '#666'}; color:white; border:none; cursor:${canAfford ? 'pointer' : 'not-allowed'}; border-radius:4px; font-weight:bold; font-size:0.75em; padding:0 6px;">💰${cost}</button>`;
+            attrList.appendChild(row);
         });
 
         // Inventário (com ordenação de exibição)
@@ -1338,9 +1782,11 @@
         p.shopItems.forEach((item, i) => {
             let bTxt = "";
             for (let b in item.bonuses) bTxt += `+${item.bonuses[b]}${b.toUpperCase()} `;
+            const shopPrice = getShopPrice(item.price);
+            const priceTxt = shopPrice < item.price ? `<s style="color:#888;">${item.price}</s> ${shopPrice} G` : `${item.price} G`;
             const div = document.createElement('div'); div.className = 'item-card';
             div.innerHTML = `<b style="color:${item.rarityColor}">${item.name}</b> (${item.rarityName})<br><small>${bTxt}</small>
-                            <button onclick="buyItem(${i})">Comprar (${item.price} G)</button>`;
+                            <button onclick="buyItem(${i})">Comprar (${priceTxt})</button>`;
             sD.appendChild(div);
         });
         save();
@@ -1403,8 +1849,20 @@
         };
     }
 
-    function addAttr(type) { if (p.points > 0) { p.points--; if (type === 'vit') { p.maxHp += 20; p.hp += 20; } else p[type] += 2; updateUI(); } }
-    function checkLvl() { if (p.xp >= p.nextLvl) { p.lvl++; p.xp -= p.nextLvl; p.nextLvl = Math.floor(p.nextLvl * 1.5); p.points += 5; p.hp = getTotalAttr('vit'); log("LEVEL UP!"); sfxLevelUp(); } }
+    function doLevelUp() {
+        p.lvl++; p.xp -= p.nextLvl; if (p.xp < 0) p.xp = 0;
+        p.nextLvl = Math.floor(p.nextLvl * 1.5); p.points += 5; p.hp = getTotalAttr('vit');
+        log("LEVEL UP!"); sfxLevelUp();
+    }
+    function checkLvl() {
+        if (p.xp < p.nextLvl) return;
+        doLevelUp();
+        // Talento: Sabedoria Ancestral especializada tem hipótese de dar um nível extra "de borla"
+        if (hasTalent('sabedoria_ancestral') && isTalentSpecialized() && Math.random() < 0.10) {
+            log("Sabedoria Ancestral: um lampejo de clareza dá-te um nível extra!", "var(--gold)");
+            doLevelUp();
+        }
+    }
 
     function fightArena() {
         const enemyName = ARENA_ENEMIES[Math.floor(Math.random() * ARENA_ENEMIES.length)];
@@ -1415,14 +1873,44 @@
             p.buffs.dmgBoostNext = false;
             log("Elixir de Fúria ativo! +50% de dano.", "var(--accent)");
         }
+
+        // Talentos: dano ofensivo (Fúria Implacável / Sobrecarga Arcana)
+        pDmg = Math.floor(pDmg * getTalentDamageMultiplier());
+        // Perícias: Poder Ofensivo, e Companion: Lobo de Batalha
+        pDmg = Math.floor(pDmg * getPericiaDamageMultiplier() * getCompanionDamageMultiplier());
+        // Crítico: Talento Golpe Crítico + hipótese base da Sorte
+        if (Math.random() < getTotalCritChance()) {
+            pDmg = Math.floor(pDmg * getEffectiveCritMult());
+            log("Golpe Crítico!", "var(--gold)");
+        }
+        // Talentos: dano recebido reduzido (Muralha de Aço); Perícias: Fortitude; Companion: Tartaruga Guardiã
+        bDmg = Math.max(0, Math.floor(bDmg * getTalentDefenseMultiplier() * getPericiaDefenseMultiplier() * getCompanionDefenseMultiplier()));
+        // Talentos: esquiva total ao contra-ataque (Passos Silenciosos), + Perícias: Reflexos
+        if (Math.random() < getTotalDodgeChance()) {
+            bDmg = 0;
+            log("Esquivaste-te de todos os contra-ataques!", "var(--accent)");
+        }
+        // Talentos: custo de vida da Sobrecarga Arcana
+        const arcaneSelfDmg = getTalentArcaneSelfDamage();
+        if (arcaneSelfDmg > 0) { p.hp -= arcaneSelfDmg; if (p.hp < 1) p.hp = 1; }
+
         log(`A enfrentar ${enemyName} (Rank ${p.arenaRank})...`);
-        while (p.hp > 0 && bHp > 0) { bHp -= pDmg; if (bHp > 0) p.hp -= bDmg; }
+        let totalDealt = 0;
+        while (p.hp > 0 && bHp > 0) { bHp -= pDmg; totalDealt += pDmg; if (bHp > 0) p.hp -= bDmg; }
+
+        // Talentos: lifesteal da Fúria Implacável especializada
+        if (hasTalent('furia_implacavel') && isTalentSpecialized() && totalDealt > 0 && p.hp > 0) {
+            const heal = Math.floor(totalDealt * 0.05);
+            if (heal > 0) { p.hp = Math.min(getTotalAttr('vit'), p.hp + heal); log(`Fúria Implacável drena ${heal} HP do inimigo!`, "var(--accent)"); }
+        }
+
         if (bHp <= 0) {
             log(`VITÓRIA contra ${enemyName}!`);
-            const gEarn = Math.floor(p.arenaRank * 100 * getPrestigeMultiplier());
-            const xEarn = Math.floor(p.arenaRank * 50 * getPrestigeMultiplier());
+            const gEarn = Math.floor(p.arenaRank * 100 * getPrestigeMultiplier() * getTalentGoldMultiplier() * getPericiaGoldMultiplier() * getCompanionGoldMultiplier());
+            const xEarn = Math.floor(p.arenaRank * 50 * getPrestigeMultiplier() * getTalentXpMultiplier() * getPericiaXpMultiplier() * getCompanionXpMultiplier());
             p.gold += gEarn; p.xp += xEarn;
             p.stats.goldEarned += gEarn; p.stats.xpEarned += xEarn;
+            addCompanionXp(xEarn);
             p.stats.arenaWins++;
             p.arenaRank++; checkLvl();
             sfxVictory();
@@ -1508,7 +1996,7 @@
         const ab = ABILITIES[p.class];
         const btn = document.getElementById('btn-ability');
         if (ab && btn) {
-            const remain = (p.ability.lastUsed + ab.cooldown) - Date.now();
+            const remain = (p.ability.lastUsed + getEffectiveAbilityCooldown()) - Date.now();
             if (remain > 0) {
                 btn.disabled = true;
                 btn.innerText = `Recarregando (${Math.ceil(remain / 1000)}s)`;
