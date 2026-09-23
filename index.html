@@ -639,6 +639,18 @@
         return 1 - (getCompanionLevel() * COMPANIONS.tartaruga.perLevel) / 100;
     }
 
+    // Percentagem de bónus que os teus multiplicadores ATUAIS (Destreza/Inteligência, Prestígio,
+    // Talento, Perícias, Companion) estão a somar ao Ouro/XP base de qualquer missão — é a mesma
+    // fórmula usada em completeQuest(), só que expressa como % acima do valor base em vez do valor final.
+    function getQuestGoldBonusPercent() {
+        const mult = (1 + getTotalAttr('dex') / 100) * getPrestigeMultiplier() * getTalentGoldMultiplier() * getPericiaGoldMultiplier() * getCompanionGoldMultiplier();
+        return Math.round((mult - 1) * 100);
+    }
+    function getQuestXpBonusPercent() {
+        const mult = (1 + getTotalAttr('int') / 100) * getPrestigeMultiplier() * getTalentXpMultiplier() * getPericiaXpMultiplier() * getCompanionXpMultiplier();
+        return Math.round((mult - 1) * 100);
+    }
+
     function chooseCompanion(id) {
         if (p.lvl < COMPANION_UNLOCK_LEVEL || (p.companion && p.companion.type)) return;
         const info = COMPANIONS[id];
@@ -1632,6 +1644,9 @@
         const qB = document.getElementById('quest-board');
         qB.innerHTML = '';
 
+        const questGoldPct = getQuestGoldBonusPercent();
+        const questXpPct = getQuestXpBonusPercent();
+
         p.currentQuests.forEach((q, i) => {
             const isLowHP = p.hp <= 1; // Verifica se a vida está no limite
             const isLegendary = q.type === 'legendary';
@@ -1647,7 +1662,7 @@
             div.innerHTML = `
                 <span class="tag ${tClass}">${tLabel}</span><br>
                 <b>${q.name}</b><br>
-                <small>${q.gold} G | ${q.xp} XP</small>
+                <small>${questGoldPct >= 0 ? '+' : ''}${questGoldPct}% Ouro | ${questXpPct >= 0 ? '+' : ''}${questXpPct}% XP</small>
                 <button class="q-btn" onclick="startQuest(${i})" ${btnStyle}>
                     ${btnText}
                 </button>`;
