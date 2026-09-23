@@ -1,7 +1,27 @@
+const CACHE_NAME = 'hero-quest-v11';
+const CACHE_FILES = [
+  'index.html',
+  'manifest.json',
+  'icon-192.png',
+  'icon-512.png',
+  'css/style.css',
+  'js/data.js',
+  'js/state.js',
+  'js/achievements.js',
+  'js/talents.js',
+  'js/progression.js',
+  'js/companion.js',
+  'js/economy.js',
+  'js/quests.js',
+  'js/combat.js',
+  'js/ui.js',
+  'js/main.js'
+];
+
 self.addEventListener('install', (e) => {
   e.waitUntil(
-    caches.open('hero-quest-v10').then((cache) => {
-      return cache.addAll(['index.html', 'manifest.json', 'icon-192.png', 'icon-512.png']);
+    caches.open(CACHE_NAME).then((cache) => {
+      return cache.addAll(CACHE_FILES);
     })
   );
 });
@@ -9,7 +29,7 @@ self.addEventListener('install', (e) => {
 self.addEventListener('activate', (e) => {
   e.waitUntil(
     caches.keys().then((keys) =>
-      Promise.all(keys.filter((k) => k !== 'hero-quest-v10').map((k) => caches.delete(k)))
+      Promise.all(keys.filter((k) => k !== CACHE_NAME).map((k) => caches.delete(k)))
     )
   );
 });
