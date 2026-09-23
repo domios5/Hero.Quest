@@ -639,16 +639,15 @@
         return 1 - (getCompanionLevel() * COMPANIONS.tartaruga.perLevel) / 100;
     }
 
-    // Percentagem de bónus que os teus multiplicadores ATUAIS (Destreza/Inteligência, Prestígio,
-    // Talento, Perícias, Companion) estão a somar ao Ouro/XP base de qualquer missão — é a mesma
-    // fórmula usada em completeQuest(), só que expressa como % acima do valor base em vez do valor final.
-    function getQuestGoldBonusPercent() {
-        const mult = (1 + getTotalAttr('dex') / 100) * getPrestigeMultiplier() * getTalentGoldMultiplier() * getPericiaGoldMultiplier() * getCompanionGoldMultiplier();
-        return Math.round((mult - 1) * 100);
+    // Valor final que uma missão vai efetivamente dar em Ouro/XP, já com o valor base da missão
+    // multiplicado por todos os teus bónus ATUAIS (Destreza/Inteligência, Prestígio, Talento,
+    // Perícias, Companion) — é exatamente a mesma fórmula usada em completeQuest(), só que
+    // calculada aqui só para mostrar na card, sem aplicar nada.
+    function getQuestFinalGold(q) {
+        return Math.floor(q.gold * (1 + getTotalAttr('dex') / 100) * getPrestigeMultiplier() * getTalentGoldMultiplier() * getPericiaGoldMultiplier() * getCompanionGoldMultiplier());
     }
-    function getQuestXpBonusPercent() {
-        const mult = (1 + getTotalAttr('int') / 100) * getPrestigeMultiplier() * getTalentXpMultiplier() * getPericiaXpMultiplier() * getCompanionXpMultiplier();
-        return Math.round((mult - 1) * 100);
+    function getQuestFinalXp(q) {
+        return Math.floor(q.xp * (1 + getTotalAttr('int') / 100) * getPrestigeMultiplier() * getTalentXpMultiplier() * getPericiaXpMultiplier() * getCompanionXpMultiplier());
     }
 
     function chooseCompanion(id) {
@@ -1644,9 +1643,6 @@
         const qB = document.getElementById('quest-board');
         qB.innerHTML = '';
 
-        const questGoldPct = getQuestGoldBonusPercent();
-        const questXpPct = getQuestXpBonusPercent();
-
         p.currentQuests.forEach((q, i) => {
             const isLowHP = p.hp <= 1; // Verifica se a vida está no limite
             const isLegendary = q.type === 'legendary';
@@ -1662,7 +1658,7 @@
             div.innerHTML = `
                 <span class="tag ${tClass}">${tLabel}</span><br>
                 <b>${q.name}</b><br>
-                <small>${questGoldPct >= 0 ? '+' : ''}${questGoldPct}% Ouro | ${questXpPct >= 0 ? '+' : ''}${questXpPct}% XP</small>
+                <small>${getQuestFinalGold(q)} G | ${getQuestFinalXp(q)} XP</small>
                 <button class="q-btn" onclick="startQuest(${i})" ${btnStyle}>
                     ${btnText}
                 </button>`;
