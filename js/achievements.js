@@ -24,7 +24,10 @@
         { id: 'enchant_10', name: 'Ferreiro Arcano', desc: 'Encanta 10 itens.', tier: 'medium', cond: () => p.stats.enchantsDone >= 10, reward: { gold: 200 } },
         { id: 'streak_7', name: 'Hábito Heróico', desc: 'Joga 7 dias seguidos.', tier: 'medium', cond: () => p.loginStreak >= 7, reward: { gold: 300 } },
         { id: 'prestige_1', name: 'Recomeço Lendário', desc: 'Faz o teu primeiro Prestígio.', tier: 'complex', cond: () => p.prestige >= 1, reward: { gold: 100 } },
-        { id: 'gold_5000', name: 'Magnata', desc: 'Acumula 5000 de Ouro ganho ao longo do jogo.', tier: 'medium', cond: () => p.stats.goldEarned >= 5000, reward: { gold: 100 } }
+        { id: 'gold_5000', name: 'Magnata', desc: 'Acumula 5000 de Ouro ganho ao longo do jogo.', tier: 'medium', cond: () => p.stats.goldEarned >= 5000, reward: { gold: 100 } },
+        { id: 'unique_1', name: 'Lenda em Formação', desc: 'Equipa 1 Item Único.', tier: 'complex', cond: () => Object.values(p.equip).some(it => it && it.unique), reward: { gold: 300 } },
+        { id: 'unique_3', name: 'Coleção Lendária', desc: 'Equipa 3 Itens Únicos ao mesmo tempo.', tier: 'complex', cond: () => Object.values(p.equip).filter(it => it && it.unique).length >= 3, reward: { gold: 600, points: 5 } },
+        { id: 'unique_6', name: 'Avatar da Lenda', desc: 'Equipa Itens Únicos nos 6 slots ao mesmo tempo.', tier: 'complex', cond: () => Object.values(p.equip).every(it => it && it.unique), reward: { gold: 1500, points: 10 } }
     ];
 
     // Soma dos bónus de atributo de todas as conquistas já desbloqueadas (aplica-se igualmente aos 5 atributos)

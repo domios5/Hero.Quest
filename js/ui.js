@@ -9,6 +9,37 @@
         box.classList.add('flash-dmg');
     }
 
+    // Resumo agregado de todos os bónus atuais (Talento + Perícias + Companion + Prestígio), para
+    // o jogador não ter de somar tudo de cabeça. Usa exatamente as mesmas funções multiplicadoras
+    // já aplicadas no combate/economia, só que aqui só para apresentação.
+    function renderBonusSummary() {
+        const box = document.getElementById('bonus-summary-box');
+        if (!box) return;
+
+        const dmgPct = Math.round((getTalentDamageMultiplier() * getPericiaDamageMultiplier() * getCompanionDamageMultiplier() - 1) * 100);
+        const defPct = Math.round((1 - getTalentDefenseMultiplier() * getPericiaDefenseMultiplier() * getCompanionDefenseMultiplier()) * 100);
+        const critChance = Math.round(getTotalCritChance() * 1000) / 10;
+        const critMult = getEffectiveCritMult();
+        const dodgeChance = Math.round(getTotalDodgeChance() * 1000) / 10;
+        const goldPct = Math.round((getPrestigeMultiplier() * getTalentGoldMultiplier() * getPericiaGoldMultiplier() * getCompanionGoldMultiplier() - 1) * 100);
+        const xpPct = Math.round((getPrestigeMultiplier() * getTalentXpMultiplier() * getPericiaXpMultiplier() * getCompanionXpMultiplier() - 1) * 100);
+        const durationPct = Math.round((1 - getPericiaDurationMultiplier()) * 100);
+        const lootPct = Math.round(getPericiaLootBonus() * 1000) / 10;
+
+        const row = (label, val) => `<div class="stat-row"><span>${label}</span><b>${val}</b></div>`;
+
+        box.innerHTML =
+            row('Dano em combate', `+${dmgPct}%`) +
+            row('Dano recebido', `-${defPct}%`) +
+            row('Hipótese de crítico', `${critChance}% (x${critMult})`) +
+            row('Hipótese de esquiva', `${dodgeChance}%`) +
+            row('Ouro ganho (Arena/Boss)', `+${goldPct}%`) +
+            row('XP ganho (Arena/Boss)', `+${xpPct}%`) +
+            row('Duração das missões', `-${durationPct}%`) +
+            row('Hipótese de loot extra', `+${lootPct}%`) +
+            `<p style="font-size:0.7em; color:#888; margin:6px 0 0 0;">Nas missões, Ouro e XP ganham ainda um bónus extra da tua Destreza/Inteligência.</p>`;
+    }
+
     function updateUI() {
         document.getElementById('display-class').innerText = p.class || "...";
         const charInfo = activeCharId ? (getCharList().find(c => c.id === activeCharId) || null) : null;
@@ -72,11 +103,12 @@
             if (item) {
                 let bTxt = "";
                 for (let b in item.bonuses) bTxt += `+${item.bonuses[b]}${b.toUpperCase()} `;
-                el.innerHTML = `<span style="color:${item.rarityColor}">${item.name}</span><br><small>${bTxt}</small>`;
-                if (slotEl) slotEl.title = buildItemTooltip(item);
+                const uniqueTag = item.unique ? '✨ ' : '';
+                el.innerHTML = `<span style="color:${item.rarityColor}">${uniqueTag}${item.name}</span><br><small>${bTxt}</small>`;
+                if (slotEl) { slotEl.title = buildItemTooltip(item); slotEl.classList.toggle('unique-item', !!item.unique); }
             } else {
                 el.innerText = "Vazio";
-                if (slotEl) slotEl.title = slotLabels[slot] + ": vazio (clica num item na mochila para equipar)";
+                if (slotEl) { slotEl.title = slotLabels[slot] + ": vazio (clica num item na mochila para equipar)"; slotEl.classList.remove('unique-item'); }
             }
         });
 
@@ -117,19 +149,32 @@
             attrList.appendChild(row);
         });
 
+        // Capacidade da mochila (base + expansões compradas + Perícia Mochila Expandida)
+        const capBox = document.getElementById('inv-capacity-box');
+        if (capBox) {
+            const capCost = getInvCapacityCost();
+            const canAffordCap = p.gold >= capCost;
+            capBox.innerHTML = `<div style="display:flex; justify-content:space-between; align-items:center; background:#3a3a3a; padding:6px 10px; border-radius:4px;">
+                <span>🎒 Capacidade: <b>${p.inv.length}/${getInvCapacity()}</b></span>
+                <button onclick="buyInvCapacity()" ${canAffordCap ? '' : 'disabled'} style="width:auto; padding:4px 8px; font-size:0.75em; margin-top:0; background:${canAffordCap ? '#c98a00' : '#666'};">Expandir (+${INV_CAPACITY_PER_PURCHASE}) — 💰${capCost}</button>
+            </div>`;
+        }
+
         // Inventário (com ordenação de exibição)
         const invL = document.getElementById('inventory-list'); invL.innerHTML = '';
         const order = getSortedInventoryIndices();
-        for (let slotPos = 0; slotPos < INV_CAPACITY; slotPos++) {
+        for (let slotPos = 0; slotPos < getInvCapacity(); slotPos++) {
             const s = document.createElement('div'); s.className = 'slot';
             const realIdx = order[slotPos];
             const item = realIdx !== undefined ? p.inv[realIdx] : null;
             if (item) {
                 let bTxt = "";
                 if (item.bonuses) for (let b in item.bonuses) bTxt += `+${item.bonuses[b]} `;
-                s.innerHTML = `<b style="color:${item.rarityColor || '#fff'}">${item.name}</b><br><small>${bTxt}</small>`;
+                const uniqueTag = item.unique ? '✨ ' : '';
+                s.innerHTML = `<b style="color:${item.rarityColor || '#fff'}">${uniqueTag}${item.name}</b><br><small>${bTxt}</small>`;
                 s.title = buildItemTooltip(item);
                 s.onclick = () => showActions(item, realIdx);
+                if (item.unique) s.classList.add('unique-item');
             } else { s.innerText = "Vazio"; }
             invL.appendChild(s);
         }
@@ -153,6 +198,12 @@
             bossArea.style.display = 'none';
         }
 
+        // Verifica se algum Item Único foi desbloqueado (independente da aba aberta)
+        checkUniqueItems();
+
+        // Perfil: Resumo de Bónus (agregado de Talento + Perícias + Companion + Prestígio)
+        renderBonusSummary();
+
         // Perfil: estatísticas e conquistas
         checkAchievements();
         document.getElementById('stat-streak').innerText = `${p.loginStreak} dia(s)`;
@@ -173,6 +224,18 @@
             div.className = 'achv-card' + (done ? ' done' : '');
             div.innerHTML = `<div class="achv-title${done ? ' done' : ''}">${done ? '✓ ' : ''}${a.name} <small style="color:#888; font-weight:normal;">(${TIER_LABELS[a.tier]}, +${bonus} atributos)</small></div><small>${a.desc}</small>`;
             achvL.appendChild(div);
+        });
+
+        const uniqL = document.getElementById('unique-items-list'); uniqL.innerHTML = '';
+        Object.keys(UNIQUE_ITEMS).forEach(uid => {
+            const def = UNIQUE_ITEMS[uid];
+            const done = !!p.uniqueItems[uid];
+            const div = document.createElement('div');
+            div.className = 'unique-card' + (done ? ' done' : '');
+            div.innerHTML = `<div class="unique-title">${done ? '✓ ' : '🔒 '}${def.icon} ${def.name}</div>
+                <small>${slotLabels[def.slot]} — requer: ${def.condDesc}</small>
+                ${done ? `<br><small style="color:#ccc; font-style:italic;">"${def.lore}"</small>` : ''}`;
+            uniqL.appendChild(div);
         });
 
         // Loja
@@ -202,7 +265,9 @@
 
     function showActions(item, idx) {
         const area = document.getElementById('item-actions'); area.style.display = 'block';
-        document.getElementById('action-info').innerHTML = `<b>${item.name}</b>`;
+        document.getElementById('action-info').innerHTML = item.unique
+            ? `<b style="color:${item.rarityColor};">✨ ${item.name}</b><br><small style="color:#ccc; font-style:italic;">"${item.lore}"</small>`
+            : `<b>${item.name}</b>`;
         const btn = document.getElementById('btn-equip-use');
         const enchantBtn = document.getElementById('btn-enchant');
 
@@ -247,14 +312,22 @@
                 enchantBtn.style.display = 'none';
             }
         }
-        const sellPrice = getSellPrice(item);
-        document.getElementById('btn-sell').innerText = `Vender (${sellPrice}G)`;
-        document.getElementById('btn-sell').onclick = () => {
-            showConfirm(`Vender ${item.name} por ${sellPrice} Ouro?`, () => {
-                p.gold += sellPrice; p.inv.splice(idx, 1); area.style.display = 'none'; updateUI();
-                sfxClick();
-            });
-        };
+        const sellBtn = document.getElementById('btn-sell');
+        if (item.unique) {
+            sellBtn.disabled = true;
+            sellBtn.innerText = 'Item Único — não pode ser vendido';
+            sellBtn.onclick = null;
+        } else {
+            sellBtn.disabled = false;
+            const sellPrice = getSellPrice(item);
+            sellBtn.innerText = `Vender (${sellPrice}G)`;
+            sellBtn.onclick = () => {
+                showConfirm(`Vender ${item.name} por ${sellPrice} Ouro?`, () => {
+                    p.gold += sellPrice; p.inv.splice(idx, 1); area.style.display = 'none'; updateUI();
+                    sfxClick();
+                });
+            };
+        }
     }
 
     function openTab(id, evt) {

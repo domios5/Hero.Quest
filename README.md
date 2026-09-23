@@ -10,15 +10,18 @@ Joga aqui: abre o `index.html` num browser, ou instala como app (ver [Instalar c
 - **Missões (Taberna)** — 3 a cada vez, com hipótese de uma missão Lendária (mais recompensa, mais risco).
 - **Arena** — combates por turnos contra inimigos que escalam com o teu Rank.
 - **World Boss** — aparece a cada 3 dias, tentativas limitadas (compráveis com ouro), foge se ficar muito tempo sem ataques.
-- **Loot & Equipamento** — 6 raridades (Comum a Mítico), 6 slots de equipamento, comparação automática ao equipar.
+- **Loot & Equipamento** — 6 raridades (Comum a Mítico), 6 slots de equipamento, nomes de Arma/Armadura próprios de cada classe, comparação automática ao equipar.
+- **Itens Únicos** — 6 itens lendários (um por slot), com nome, lore e stats fixos muito acima de um Mítico normal, ganhos uma única vez ao cumprir um marco específico (ex.: Excalibur às 100 vitórias na Arena). Nunca podem ser vendidos, e têm borda dourada especial na interface.
 - **Loja** — poções e itens à venda, com refresh periódico ou manual.
+- **Mochila expansível** — capacidade base de 12, aumentável com Ouro ou com a Perícia "Mochila Expandida".
 - **Atributos com Ouro** — Força, Vida, Destreza, Inteligência e Sorte sobem gastando ouro, com custo a crescer exponencialmente por compra.
-- **Perícias** — 8 perks passivos (até 20 pontos cada) pagos com Pontos de Perícia ganhos ao subir de nível.
+- **Perícias** — 9 perks passivos (a maioria até 20 pontos, alguns com limite próprio) pagos com Pontos de Perícia ganhos ao subir de nível.
 - **Árvore de Talentos** — 3 talentos por classe, desbloqueiam no nível 15 e especializam-se no nível 40.
 - **Companion** — desbloqueia no nível 20; 3 tipos à escolha, ganha 50% da tua XP (nunca ultrapassa o teu nível), retreinável sem perder progresso.
 - **Sorte e Destreza** — dão hipótese de crítico e de esquiva a todas as classes, combinando-se com talentos e perícias.
 - **Prestígio** — reinicia o progresso a troco de um bónus permanente de Ouro/XP.
-- **Conquistas** — dão bónus permanentes de atributos, por tier.
+- **Conquistas** — dão bónus permanentes de atributos, por tier (incluindo conquistas ligadas aos Itens Únicos).
+- **Resumo de Bónus** — painel no Perfil com todos os bónus atuais já agregados (dano, defesa, crítico, esquiva, ouro, XP, etc.).
 - **Sequência de login diário** e **ganhos offline**.
 - **Multi-personagem** — cria quantos personagens quiseres, cada um com o seu progresso.
 - **PWA instalável** — funciona offline via Service Worker, com ícone e ecrã próprio.

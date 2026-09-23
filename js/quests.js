@@ -82,11 +82,14 @@
         p.stats.goldEarned += fG; p.stats.xpEarned += fX;
         addCompanionXp(fX);
 
-        // 2. ADICIONAR PERDA DE VIDA (1 a 10, o dobro nas missões Lendárias, reduzida por Passos Silenciosos especializado, Fortitude e Tartaruga Guardiã)
-        let damageTaken = Math.floor(Math.random() * 10) + 1;
-        if (isLegendary) damageTaken *= 2;
-        damageTaken = Math.floor(damageTaken * getTalentQuestDmgMult() * getPericiaDefenseMultiplier() * getCompanionDefenseMultiplier());
-        if (damageTaken < 0) damageTaken = 0;
+        // 2. ADICIONAR PERDA DE VIDA (1% a 10% do HP máximo, o dobro nas missões Lendárias, reduzida
+        // por Passos Silenciosos especializado, Fortitude e Tartaruga Guardiã). É percentual (não fixo)
+        // para continuar a ser relevante a níveis altos, onde o HP máximo cresce muito.
+        const maxHpForDmg = getTotalAttr('vit');
+        let dmgPct = Math.random() * 9 + 1; // 1% a 10%
+        if (isLegendary) dmgPct *= 2;
+        let damageTaken = Math.floor(maxHpForDmg * (dmgPct / 100) * getTalentQuestDmgMult() * getPericiaDefenseMultiplier() * getCompanionDefenseMultiplier());
+        if (damageTaken < 1) damageTaken = 1; // perde sempre pelo menos 1 HP, mesmo com muita mitigação
         p.hp -= damageTaken;
         flashDamage();
 

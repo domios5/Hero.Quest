@@ -35,8 +35,9 @@
     }
 
     // --- Perícias (Pontos de Perícia, ganhos ao subir de nível) ---
-    // Sistema de 8 perícias passivas, cada uma com um limite de 20 pontos investidos e um
-    // efeito percentual por ponto. Guardadas em p.pericias = { chave: pontosInvestidos }.
+    // Sistema de 9 perícias passivas, cada uma com um limite de pontos investidos e um efeito por
+    // ponto. Guardadas em p.pericias = { chave: pontosInvestidos }. A maioria tem efeito percentual
+    // (flat: false/omitido); "Mochila Expandida" é uma exceção com efeito plano (+N slots, sem %).
     const PERICIAS = {
         vitalidade_extra:  { name: 'Vitalidade Extra',      icon: '❤️', desc: '+1% de HP máximo por ponto',              perPoint: 1,   max: 20 },
         poder_ofensivo:    { name: 'Poder Ofensivo',        icon: '⚔️', desc: '+1% de dano em combate por ponto',        perPoint: 1,   max: 20 },
@@ -45,7 +46,8 @@
         fortuna:           { name: 'Fortuna',               icon: '🍀', desc: '+1% de Ouro ganho por ponto',             perPoint: 1,   max: 20 },
         sabedoria:         { name: 'Sabedoria',             icon: '📚', desc: '+1% de XP ganho por ponto',               perPoint: 1,   max: 20 },
         instinto_saque:    { name: 'Instinto de Saque',     icon: '🎯', desc: '+0.5% de hipótese de loot por ponto',     perPoint: 0.5, max: 20 },
-        reflexos:          { name: 'Reflexos',              icon: '💨', desc: '+0.75% de hipótese de esquiva por ponto', perPoint: 0.75, max: 20 }
+        reflexos:          { name: 'Reflexos',              icon: '💨', desc: '+0.75% de hipótese de esquiva por ponto', perPoint: 0.75, max: 20 },
+        mochila_expandida: { name: 'Mochila Expandida',     icon: '🎒', desc: '+1 slot de mochila por ponto',            perPoint: 1,   max: 10, flat: true, unit: ' slots' }
     };
 
     function getPericiaPoints(key) { return (p.pericias && p.pericias[key]) || 0; }
@@ -54,6 +56,8 @@
         if (!info) return 0;
         return getPericiaPoints(key) * info.perPoint;
     }
+    // Bónus plano da Perícia Mochila Expandida (não é percentual, é aplicado diretamente à capacidade)
+    function getPericiaBackpackSlots() { return getPericiaPoints('mochila_expandida') * (PERICIAS.mochila_expandida.perPoint || 1); }
     function addPericia(key) {
         const info = PERICIAS[key];
         if (!info) return;
@@ -90,10 +94,11 @@
             const cur = getPericiaPoints(key);
             const atMax = cur >= info.max;
             const canBuy = p.points > 0 && !atMax;
-            const pct = (cur * info.perPoint);
-            const pctTxt = (Math.round(pct * 100) / 100).toString();
+            const val = (cur * info.perPoint);
+            const valTxt = (Math.round(val * 100) / 100).toString();
+            const suffix = info.flat ? (info.unit || '') : '%';
             html += `<div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px; background:#3a3a3a; padding:6px 10px; border-radius:4px;">
-                <span title="${info.desc}">${info.icon} ${info.name}: <b>${cur}/${info.max}</b> <small style="color:#8f8;">(${pctTxt}%)</small></span>
+                <span title="${info.desc}">${info.icon} ${info.name}: <b>${cur}/${info.max}</b> <small style="color:#8f8;">(${info.flat ? '+' : ''}${valTxt}${suffix})</small></span>
                 <button onclick="addPericia('${key}')" ${canBuy ? '' : 'disabled'} style="width:28px; height:28px; background:${canBuy ? '#4caf50' : '#666'}; color:white; border:none; cursor:${canBuy ? 'pointer' : 'not-allowed'}; border-radius:50%; font-weight:bold;">+</button>
             </div>`;
         });

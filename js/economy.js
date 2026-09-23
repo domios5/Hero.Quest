@@ -16,10 +16,10 @@
         }
         const rarity = RARITIES[rarityKey];
 
-        // 2. Sortear Tipo e Nome
+        // 2. Sortear Tipo e Nome (Arma/Armadura dependem da classe; o resto é neutro)
         const types = ['weapon', 'armor', 'amulet', 'ring', 'boots', 'cape'];
         const t = types[Math.floor(Math.random() * types.length)];
-        const baseName = itemNames[t][Math.floor(Math.random() * itemNames[t].length)];
+        const baseName = pickItemName(t);
 
         // 3. Gerar Bónus (Atributos)
         let bonuses = {};
@@ -71,9 +71,40 @@
         return Math.floor((Math.random() * 5 + min) * q * multiplier * 0.5) + 1;
     }
 
+    // Escolhe um nome para o item: Arma/Armadura usam a lista da classe atual (com fallback para
+    // Guerreiro se por algum motivo p.class ainda não estiver definido); os outros slots são neutros.
+    function pickItemName(type) {
+        if (itemNamesByClass[type]) {
+            const opts = itemNamesByClass[type][p.class] || itemNamesByClass[type]['Guerreiro'];
+            return opts[Math.floor(Math.random() * opts.length)];
+        }
+        const opts = itemNamesGeneric[type];
+        return opts[Math.floor(Math.random() * opts.length)];
+    }
+
+    // --- Capacidade da Mochila ---
+    // Capacidade total = base + expansões compradas com Ouro (custo cresce por compra) + pontos
+    // investidos na Perícia "Mochila Expandida" (+1 slot/ponto).
+    function getInvCapacity() {
+        return INV_CAPACITY_BASE + (p.invCapacityPurchases || 0) * INV_CAPACITY_PER_PURCHASE + getPericiaBackpackSlots();
+    }
+    function getInvCapacityCost() {
+        const n = p.invCapacityPurchases || 0;
+        return Math.round(50 * Math.pow(1.3, n));
+    }
+    function buyInvCapacity() {
+        const cost = getInvCapacityCost();
+        if (p.gold < cost) { log(`Precisas de ${cost} Ouro para expandir a mochila.`, "var(--btn-red)"); return; }
+        p.gold -= cost;
+        p.invCapacityPurchases = (p.invCapacityPurchases || 0) + 1;
+        sfxClick();
+        log(`Mochila expandida! +${INV_CAPACITY_PER_PURCHASE} slots.`, "var(--accent)");
+        updateUI();
+    }
+
     // Adiciona um item à mochila respeitando o limite de slots visíveis
     function addToInventory(item) {
-        if (p.inv.length >= INV_CAPACITY) {
+        if (p.inv.length >= getInvCapacity()) {
             log("Mochila cheia! Vende ou usa itens antes de continuar.", "var(--btn-red)");
             return false;
         }
@@ -87,7 +118,7 @@
         const rarity = RARITIES.MITICO;
         const types = ['weapon', 'armor', 'amulet', 'ring', 'boots', 'cape'];
         const t = types[Math.floor(Math.random() * types.length)];
-        const baseName = itemNames[t][Math.floor(Math.random() * itemNames[t].length)];
+        const baseName = pickItemName(t);
 
         let bonuses = {};
         ['str', 'vit', 'dex', 'int', 'luk'].forEach(attr => {
@@ -104,6 +135,49 @@
             bonuses: bonuses,
             price: quality * (rarity.slots * 50)
         };
+    }
+
+    // --- Itens Únicos ---
+    // Cria o item físico correspondente a um UNIQUE_ITEMS[uid]. Stats muito acima de um Mítico
+    // (multiplicadores bem maiores no genValue), sempre nos 5 atributos para servir qualquer classe,
+    // preço 0 e uma flag "unique" que bloqueia a venda e ativa o visual especial (borda dourada).
+    function createUniqueItem(uid) {
+        const def = UNIQUE_ITEMS[uid];
+        if (!def) return null;
+        let bonuses = {};
+        ['str', 'vit', 'dex', 'int', 'luk'].forEach(attr => {
+            let mult = (attr === 'vit') ? 45 : 2.5;
+            bonuses[attr] = genValue(Math.max(p.lvl, 1), mult);
+        });
+        return {
+            id: 'unique_' + uid + '_' + Date.now(),
+            uniqueId: uid,
+            name: def.name,
+            rarityName: 'Único',
+            rarityColor: '#ffd700',
+            type: def.slot,
+            bonuses: bonuses,
+            lore: def.lore,
+            unique: true,
+            price: 0
+        };
+    }
+
+    // Verifica todos os Itens Únicos ainda não desbloqueados; ao cumprir a condição, cria o item,
+    // força-o para a mochila (ignora o limite de capacidade — é demasiado raro para se perder por
+    // falta de espaço) e avisa o jogador com a lore numa janela dedicada.
+    function checkUniqueItems() {
+        Object.keys(UNIQUE_ITEMS).forEach(uid => {
+            if (p.uniqueItems[uid]) return;
+            const def = UNIQUE_ITEMS[uid];
+            if (!def.cond()) return;
+            p.uniqueItems[uid] = true;
+            const item = createUniqueItem(uid);
+            p.inv.push(item); // sem verificação de capacidade — item único, nunca se pode perder
+            log(`ITEM ÚNICO DESBLOQUEADO: ${def.icon} ${def.name}!`, "#ffd700");
+            sfxLevelUp();
+            showNotice(`✨ ${def.icon} ${def.name}`, `${def.lore}\n\nEncontras este item na tua mochila.`);
+        });
     }
 
     function enchantItem(idx) {
@@ -128,7 +202,7 @@
     function unequip(slot) {
         const item = p.equip[slot];
         if (!item) return;
-        if (p.inv.length >= INV_CAPACITY) { log("Mochila cheia! Não é possível desequipar.", "var(--btn-red)"); return; }
+        if (p.inv.length >= getInvCapacity()) { log("Mochila cheia! Não é possível desequipar.", "var(--btn-red)"); return; }
         addToInventory(item);
         p.equip[slot] = null;
         updateUI();
@@ -156,14 +230,14 @@
     function buyItem(idx) {
         const it = p.shopItems[idx];
         const price = getShopPrice(it.price);
-        if (p.inv.length >= INV_CAPACITY) { log("Mochila cheia! Vende algo antes de comprar.", "var(--btn-red)"); return; }
+        if (p.inv.length >= getInvCapacity()) { log("Mochila cheia! Vende algo antes de comprar.", "var(--btn-red)"); return; }
         if (p.gold >= price) { p.gold -= price; addToInventory(it); p.shopItems.splice(idx, 1); updateUI(); }
     }
 
     function buyPotionById(id) {
         const pot = POTIONS.find(x => x.id === id);
         if (!pot) return;
-        if (p.inv.length >= INV_CAPACITY) { log("Mochila cheia! Vende algo antes de comprar.", "var(--btn-red)"); return; }
+        if (p.inv.length >= getInvCapacity()) { log("Mochila cheia! Vende algo antes de comprar.", "var(--btn-red)"); return; }
         if (p.gold < pot.price) { log("Ouro insuficiente.", "var(--btn-red)"); return; }
         p.gold -= pot.price;
         addToInventory({ name: pot.name, type: 'consumable', effect: pot.effect, amount: pot.amount });
@@ -200,14 +274,20 @@
         if (item.bonuses) {
             for (let b in item.bonuses) lines.push(`+${item.bonuses[b]} ${attrNames[b] || b}`);
         }
-        if (item.price) lines.push(`Valor: ${item.price} Ouro`);
+        if (item.unique) {
+            lines.push('');
+            lines.push(`"${item.lore}"`);
+            lines.push('Item Único — não pode ser vendido.');
+        } else if (item.price) {
+            lines.push(`Valor: ${item.price} Ouro`);
+        }
         return lines.join('\n');
     }
 
     function getSortedInventoryIndices() {
         let indices = p.inv.map((_, i) => i);
         if (invSortMode === 'rarity') {
-            const order = ['Mítico', 'Lendário', 'Épico', 'Raro', 'Incomum', 'Comum'];
+            const order = ['Único', 'Mítico', 'Lendário', 'Épico', 'Raro', 'Incomum', 'Comum'];
             indices.sort((a, b) => {
                 const ra = order.indexOf(p.inv[a].rarityName); const rb = order.indexOf(p.inv[b].rarityName);
                 return (ra === -1 ? 999 : ra) - (rb === -1 ? 999 : rb);

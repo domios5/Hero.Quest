@@ -31,7 +31,9 @@
             talent: { chosen: null }, // id do talento escolhido; a especialização não é gravada à parte, é sempre derivada do nível atual
             attrPurchases: { str: 0, vit: 0, dex: 0, int: 0, luk: 0 }, // quantas vezes cada atributo já foi comprado com Ouro (define o custo da próxima compra)
             pericias: {}, // { chave_pericia: pontos_investidos }, comprado com Pontos de Perícia (ganhos ao subir de nível)
-            companion: { type: null, xp: 0 } // xp acumulado (nunca desce); o nível é sempre derivado dele, capado ao nível do jogador
+            companion: { type: null, xp: 0 }, // xp acumulado (nunca desce); o nível é sempre derivado dele, capado ao nível do jogador
+            invCapacityPurchases: 0, // quantas vezes a mochila já foi expandida com Ouro (define o custo da próxima expansão)
+            uniqueItems: {} // { chave_item_unico: true } — Itens Únicos já alguma vez desbloqueados por este personagem
         };
     }
 
@@ -96,6 +98,8 @@
         if (!p.companion) p.companion = { type: null, xp: 0 };
         if (p.companion.type === undefined) p.companion.type = null;
         if (p.companion.xp === undefined) p.companion.xp = 0;
+        if (p.invCapacityPurchases === undefined) p.invCapacityPurchases = 0;
+        if (!p.uniqueItems) p.uniqueItems = {};
         if (p.lastActiveAt === undefined) p.lastActiveAt = 0;
         if (p.lastLoginDay === undefined) p.lastLoginDay = null;
         if (p.loginStreak === undefined) p.loginStreak = 0;

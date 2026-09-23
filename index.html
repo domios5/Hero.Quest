@@ -89,6 +89,7 @@
     </div>
 
     <div id="inv" class="tab-content">
+        <div id="inv-capacity-box" style="margin-bottom:10px;"></div>
         <div style="margin-bottom:10px; display:flex; gap:8px; align-items:center;">
             <label style="font-size:0.8em; white-space:nowrap;">Ordenar:</label>
             <select id="inv-sort" onchange="setInvSort(this.value)" style="flex:1;">
@@ -138,6 +139,9 @@
     </div>
 
     <div id="profile" class="tab-content">
+        <h4>Resumo de Bónus</h4>
+        <div id="bonus-summary-box" style="margin-bottom:15px;"></div>
+
         <h4>Sequência Diária</h4>
         <div class="stat-row"><span>Sequência atual</span><b id="stat-streak">0 dias</b></div>
 
@@ -153,6 +157,9 @@
 
         <h4>Conquistas</h4>
         <div id="achv-list"></div>
+
+        <h4>Itens Lendários</h4>
+        <div id="unique-items-list"></div>
     </div>
 
     <div id="progress-container"><div id="progress-bar"></div></div>
