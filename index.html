@@ -72,6 +72,13 @@
 
         #top-bar-extra { display:flex; justify-content:flex-end; gap:6px; margin-bottom:8px; }
         #top-bar-extra button { width:auto; padding:4px 8px; font-size:0.75em; margin-top:0; background:#444; }
+
+        /* Seleção de personagem */
+        #char-select-screen { position: fixed; top:0; left:0; width:100%; height:100%; background: rgba(0,0,0,0.97); z-index: 300; display:none; flex-direction:column; align-items:center; justify-content:center; padding:20px; box-sizing:border-box; overflow-y:auto; }
+        #char-select-screen.visible { display:flex; }
+        .char-card { background:#2c2c2c; border:1px solid #555; border-radius:8px; padding:12px 15px; margin:6px 0; width:100%; max-width:360px; display:flex; justify-content:space-between; align-items:center; cursor:pointer; }
+        .char-card:hover { border-color: var(--accent); }
+        .char-card .char-del { width:auto; padding:4px 10px; background:#a32a2a; margin-left:10px; }
     </style>
 
     <link rel="manifest" href="manifest.json">
@@ -96,7 +103,7 @@
 
     <div style="text-align: center; margin-bottom: 10px;">
         <h2 style="color: var(--accent); margin: 0;">Hero Quest: Gear Master</h2>
-        <small><span id="display-class">...</span> Nível <span id="lvl">1</span></small>
+        <small><span id="display-class">...</span> Nível <span id="lvl">1</span> — <span id="display-char-name" style="color:var(--gold);"></span></small>
     </div>
 
     <div class="stats-grid">
@@ -208,6 +215,7 @@
         <div class="stat-row"><span>Itens encantados</span><b id="stat-enchants">0</b></div>
         <div class="stat-row"><span>Ouro total ganho</span><b id="stat-gold">0</b></div>
         <div class="stat-row"><span>XP total ganho</span><b id="stat-xp">0</b></div>
+        <div class="stat-row"><span>Bónus de Conquistas</span><b id="stat-achv-bonus">+0 em todos os atributos</b></div>
 
         <h4>Conquistas</h4>
         <div id="achv-list"></div>
@@ -215,12 +223,23 @@
 
     <div id="progress-container"><div id="progress-bar"></div></div>
     <div class="log" id="game-log"></div>
-    <div style="display:flex; gap:5px; margin-top:10px;">
+    <div style="display:flex; gap:5px; margin-top:10px; flex-wrap:wrap;">
+        <button onclick="openCharSelect()" style="background: #333; font-size: 0.7em; width: auto; padding: 5px 10px;">Trocar Personagem</button>
         <button onclick="resetGame()" style="background: #333; font-size: 0.7em; width: auto; padding: 5px 10px;">Reset</button>
         <button onclick="exportSave()" style="background: #333; font-size: 0.7em; width: auto; padding: 5px 10px;">Exportar Save</button>
         <button onclick="document.getElementById('import-file-input').click()" style="background: #333; font-size: 0.7em; width: auto; padding: 5px 10px;">Importar Save</button>
         <input type="file" id="import-file-input" accept="application/json" style="display:none" onchange="importSaveFile(this)">
     </div>
+</div>
+
+<div id="char-select-screen">
+    <h2 style="color: var(--accent);">Os teus Personagens</h2>
+    <div id="char-list" style="width:100%; max-width:360px;"></div>
+    <div style="width:100%; max-width:360px; margin-top:15px; display:flex; gap:8px;">
+        <input type="text" id="new-char-name" placeholder="Nome do novo personagem" style="flex:1; padding:8px; border-radius:4px; border:1px solid #555; background:#222; color:white;">
+        <button onclick="createNewCharacter()" style="width:auto; padding:8px 14px; background:#4caf50;">Criar</button>
+    </div>
+    <button id="btn-close-char-select" onclick="closeCharSelect()" style="display:none; width:auto; padding:6px 14px; margin-top:15px; background:#555;">Voltar ao Jogo</button>
 </div>
 
 <script>
@@ -229,30 +248,37 @@
     const SHOP_REFRESH_INTERVAL = 5 * 60 * 1000; // 5 minutos
     const PRESTIGE_LEVEL_REQ = 10;
 
-    let p = {
-        saveVersion: CURRENT_SAVE_VERSION,
-        class: null, lvl: 1, gold: 50, xp: 0, nextLvl: 100, points: 0,
-        hp: 100, maxHp: 100, str: 5, dex: 5, int: 5, luk: 1, arenaRank: 1,
-        inv: [], equip: { weapon: null, armor: null, amulet: null, ring: null, boots: null, cape: null },
-        shopItems: [], shopRefreshAt: 0, currentQuests: [],
-        boss: {
-            hp: 0,
-            maxHp: 0,
-            dmg: 0,
-            attempts: 5,
-            nextSpawn: 0, // Timestamp para daqui a 3 dias
-            active: false,
-            depletedAt: 0 // Timestamp de quando as tentativas chegaram a 0, para o boss fugir depois de 1h
-        },
-        ability: { lastUsed: 0 },
-        prestige: 0,
-        buffs: { dmgBoostNext: false },
-        lastActiveAt: 0,
-        lastLoginDay: null, // string "YYYY-MM-DD" do último dia em que o jogo foi aberto
-        loginStreak: 0,
-        stats: { questsDone: 0, arenaWins: 0, bossesKilled: 0, itemsFound: 0, enchantsDone: 0, goldEarned: 0, xpEarned: 0 },
-        achievements: {}
-    };
+    // Estado inicial de um personagem novo. É uma função (não um objeto fixo) porque agora
+    // é possível criar vários personagens — cada um precisa da sua própria cópia limpa.
+    function defaultCharacterState() {
+        return {
+            saveVersion: CURRENT_SAVE_VERSION,
+            class: null, lvl: 1, gold: 50, xp: 0, nextLvl: 100, points: 0,
+            hp: 100, maxHp: 100, str: 5, dex: 5, int: 5, luk: 1, arenaRank: 1,
+            inv: [], equip: { weapon: null, armor: null, amulet: null, ring: null, boots: null, cape: null },
+            shopItems: [], shopRefreshAt: 0, currentQuests: [],
+            boss: {
+                hp: 0,
+                maxHp: 0,
+                dmg: 0,
+                attempts: 5,
+                nextSpawn: 0, // Timestamp para daqui a 3 dias
+                active: false,
+                depletedAt: 0 // Timestamp de quando as tentativas chegaram a 0, para o boss fugir depois de 1h
+            },
+            ability: { lastUsed: 0 },
+            prestige: 0,
+            buffs: { dmgBoostNext: false },
+            lastActiveAt: 0,
+            lastLoginDay: null, // string "YYYY-MM-DD" do último dia em que o jogo foi aberto
+            loginStreak: 0,
+            stats: { questsDone: 0, arenaWins: 0, bossesKilled: 0, itemsFound: 0, enchantsDone: 0, goldEarned: 0, xpEarned: 0 },
+            achievements: {}
+        };
+    }
+
+    let p = defaultCharacterState();
+    let activeCharId = null; // id do personagem atualmente carregado (chave usada no localStorage)
 
     let invSortMode = 'none'; // não é guardado, reinicia a cada carregamento
 
@@ -285,24 +311,38 @@
         MITICO:    { name: "Mítico", color: "#ff0000", chance: 0.01, slots: 5 }
     };
 
-    // Cada conquista: condição sobre o estado atual e recompensa dada uma única vez ao desbloquear.
+    // Cada tier dá um bónus PERMANENTE em todos os 5 atributos por cada conquista desse tier desbloqueada.
+    // É calculado sempre a partir de p.achievements (nunca guardado à parte), por isso nunca se perde
+    // e nunca fica desatualizado — inclui conquistas já desbloqueadas antes desta funcionalidade existir.
+    const ACHIEVEMENT_TIER_BONUS = { simple: 1, medium: 5, complex: 10 };
+    const TIER_LABELS = { simple: 'Simples', medium: 'Média', complex: 'Complexa' };
+
+    // Cada conquista: condição sobre o estado atual, tier (que define o bónus de atributos) e
+    // recompensa extra em ouro/pontos dada uma única vez ao desbloquear.
     const ACHIEVEMENTS = [
-        { id: 'first_quest', name: 'Primeiros Passos', desc: 'Completa 1 missão.', cond: () => p.stats.questsDone >= 1, reward: { gold: 20 } },
-        { id: 'quests_25', name: 'Aventureiro Dedicado', desc: 'Completa 25 missões.', cond: () => p.stats.questsDone >= 25, reward: { gold: 150 } },
-        { id: 'quests_100', name: 'Lenda da Taberna', desc: 'Completa 100 missões.', cond: () => p.stats.questsDone >= 100, reward: { gold: 500, points: 5 } },
-        { id: 'arena_10', name: 'Gladiador', desc: 'Vence 10 combates na Arena.', cond: () => p.stats.arenaWins >= 10, reward: { gold: 100 } },
-        { id: 'arena_rank10', name: 'Campeão da Arena', desc: 'Chega ao Arena Rank 10.', cond: () => p.arenaRank >= 10, reward: { gold: 300, points: 3 } },
-        { id: 'first_boss', name: 'Caçador de Bosses', desc: 'Derrota o World Boss pela primeira vez.', cond: () => p.stats.bossesKilled >= 1, reward: { gold: 200 } },
-        { id: 'boss_5', name: 'Flagelo dos Titãs', desc: 'Derrota o World Boss 5 vezes.', cond: () => p.stats.bossesKilled >= 5, reward: { gold: 750, points: 5 } },
-        { id: 'lvl_10', name: 'Veterano', desc: 'Chega ao nível 10.', cond: () => p.lvl >= 10, reward: { gold: 150 } },
-        { id: 'lvl_25', name: 'Herói Consagrado', desc: 'Chega ao nível 25.', cond: () => p.lvl >= 25, reward: { gold: 500, points: 5 } },
-        { id: 'mythic_item', name: 'Sortudo', desc: 'Equipa um item Mítico.', cond: () => Object.values(p.equip).some(it => it && it.rarityName === 'Mítico'), reward: { gold: 250 } },
-        { id: 'full_gear', name: 'Bem Equipado', desc: 'Equipa item em todos os 6 slots.', cond: () => Object.values(p.equip).every(it => !!it), reward: { gold: 200 } },
-        { id: 'enchant_10', name: 'Ferreiro Arcano', desc: 'Encanta 10 itens.', cond: () => p.stats.enchantsDone >= 10, reward: { gold: 200 } },
-        { id: 'streak_7', name: 'Hábito Heróico', desc: 'Joga 7 dias seguidos.', cond: () => p.loginStreak >= 7, reward: { gold: 300 } },
-        { id: 'prestige_1', name: 'Recomeço Lendário', desc: 'Faz o teu primeiro Prestígio.', cond: () => p.prestige >= 1, reward: { gold: 100 } },
-        { id: 'gold_5000', name: 'Magnata', desc: 'Acumula 5000 de Ouro ganho ao longo do jogo.', cond: () => p.stats.goldEarned >= 5000, reward: { gold: 100 } }
+        { id: 'first_quest', name: 'Primeiros Passos', desc: 'Completa 1 missão.', tier: 'simple', cond: () => p.stats.questsDone >= 1, reward: { gold: 20 } },
+        { id: 'quests_25', name: 'Aventureiro Dedicado', desc: 'Completa 25 missões.', tier: 'medium', cond: () => p.stats.questsDone >= 25, reward: { gold: 150 } },
+        { id: 'quests_100', name: 'Lenda da Taberna', desc: 'Completa 100 missões.', tier: 'complex', cond: () => p.stats.questsDone >= 100, reward: { gold: 500, points: 5 } },
+        { id: 'arena_10', name: 'Gladiador', desc: 'Vence 10 combates na Arena.', tier: 'medium', cond: () => p.stats.arenaWins >= 10, reward: { gold: 100 } },
+        { id: 'arena_rank10', name: 'Campeão da Arena', desc: 'Chega ao Arena Rank 10.', tier: 'complex', cond: () => p.arenaRank >= 10, reward: { gold: 300, points: 3 } },
+        { id: 'first_boss', name: 'Caçador de Bosses', desc: 'Derrota o World Boss pela primeira vez.', tier: 'medium', cond: () => p.stats.bossesKilled >= 1, reward: { gold: 200 } },
+        { id: 'boss_5', name: 'Flagelo dos Titãs', desc: 'Derrota o World Boss 5 vezes.', tier: 'complex', cond: () => p.stats.bossesKilled >= 5, reward: { gold: 750, points: 5 } },
+        { id: 'lvl_10', name: 'Veterano', desc: 'Chega ao nível 10.', tier: 'medium', cond: () => p.lvl >= 10, reward: { gold: 150 } },
+        { id: 'lvl_25', name: 'Herói Consagrado', desc: 'Chega ao nível 25.', tier: 'complex', cond: () => p.lvl >= 25, reward: { gold: 500, points: 5 } },
+        { id: 'mythic_item', name: 'Sortudo', desc: 'Equipa um item Mítico.', tier: 'medium', cond: () => Object.values(p.equip).some(it => it && it.rarityName === 'Mítico'), reward: { gold: 250 } },
+        { id: 'full_gear', name: 'Bem Equipado', desc: 'Equipa item em todos os 6 slots.', tier: 'medium', cond: () => Object.values(p.equip).every(it => !!it), reward: { gold: 200 } },
+        { id: 'enchant_10', name: 'Ferreiro Arcano', desc: 'Encanta 10 itens.', tier: 'medium', cond: () => p.stats.enchantsDone >= 10, reward: { gold: 200 } },
+        { id: 'streak_7', name: 'Hábito Heróico', desc: 'Joga 7 dias seguidos.', tier: 'medium', cond: () => p.loginStreak >= 7, reward: { gold: 300 } },
+        { id: 'prestige_1', name: 'Recomeço Lendário', desc: 'Faz o teu primeiro Prestígio.', tier: 'complex', cond: () => p.prestige >= 1, reward: { gold: 100 } },
+        { id: 'gold_5000', name: 'Magnata', desc: 'Acumula 5000 de Ouro ganho ao longo do jogo.', tier: 'medium', cond: () => p.stats.goldEarned >= 5000, reward: { gold: 100 } }
     ];
+
+    // Soma dos bónus de atributo de todas as conquistas já desbloqueadas (aplica-se igualmente aos 5 atributos)
+    function getAchievementBonus() {
+        let total = 0;
+        ACHIEVEMENTS.forEach(a => { if (p.achievements[a.id]) total += ACHIEVEMENT_TIER_BONUS[a.tier] || 0; });
+        return total;
+    }
 
     // Janela de confirmação própria do jogo (evita depender do confirm() nativo do
     // browser, que alguns browsers deixam de mostrar depois de vários usos na mesma página)
@@ -390,10 +430,34 @@
         document.getElementById('btn-install').style.display = 'none';
     });
 
+    // --- Personagens (cada um é gravado numa chave própria do localStorage) ---
+    function charStorageKey(id) { return 'heroQuestChar_' + id; }
+    function getCharList() {
+        try { return JSON.parse(localStorage.getItem('heroQuestCharList') || '[]'); } catch (e) { return []; }
+    }
+    function saveCharList(list) {
+        try { localStorage.setItem('heroQuestCharList', JSON.stringify(list)); } catch (e) {}
+    }
+
+    // Se existir o save de personagem único de versões anteriores do jogo e ainda não houver
+    // nenhuma lista de personagens, converte-o automaticamente no primeiro personagem — não perdes o progresso.
+    function migrateOldSingleSave() {
+        const old = localStorage.getItem('heroQuestFinalSave');
+        const list = getCharList();
+        if (old && list.length === 0) {
+            const id = 'char_' + Date.now();
+            localStorage.setItem(charStorageKey(id), old);
+            saveCharList([{ id, name: 'Aventureiro', createdAt: Date.now() }]);
+            localStorage.setItem('heroQuestActiveChar', id);
+            localStorage.removeItem('heroQuestFinalSave');
+        }
+    }
+
     function save() {
+        if (!activeCharId) return;
         try {
             p.lastActiveAt = Date.now();
-            localStorage.setItem('heroQuestFinalSave', JSON.stringify(p));
+            localStorage.setItem(charStorageKey(activeCharId), JSON.stringify(p));
         } catch (e) {
             log("Não foi possível guardar o progresso (armazenamento cheio ou bloqueado).", "var(--btn-red)");
         }
@@ -470,23 +534,111 @@
         return true;
     }
 
-    function load() {
-        const saved = localStorage.getItem('heroQuestFinalSave');
-        if (saved) {
-            try {
-                p = JSON.parse(saved);
-            } catch (e) {
-                log("Save corrompido, a começar um novo jogo.", "var(--btn-red)");
-                return;
-            }
-            migrateSave();
+    // Carrega um personagem existente e torna-o o ativo. Chamada ao clicar num cartão no ecrã de seleção.
+    function loadCharacter(id) {
+        const raw = localStorage.getItem(charStorageKey(id));
+        if (!raw) return;
+        try {
+            p = JSON.parse(raw);
+        } catch (e) {
+            log("Save deste personagem está corrompido.", "var(--btn-red)");
+            return;
+        }
+        activeCharId = id;
+        localStorage.setItem('heroQuestActiveChar', id);
+        migrateSave();
+        closeCharSelect(true);
+
+        if (p.class) {
             document.getElementById('class-selection').style.display = 'none';
             if (!p.currentQuests || p.currentQuests.length === 0) generateNewQuests();
             if (!p.shopItems || p.shopItems.length === 0) refreshShop();
             updateUI();
             const showedOffline = checkOfflineGains();
             if (!showedOffline) checkDailyLogin();
+        } else {
+            document.getElementById('class-selection').style.display = 'flex';
         }
+    }
+
+    // Cria um personagem novo com o nome escrito no ecrã de seleção e entra logo na escolha de classe.
+    function createNewCharacter() {
+        const input = document.getElementById('new-char-name');
+        const name = input.value.trim();
+        if (!name) { log("Dá um nome ao personagem antes de criar.", "var(--btn-red)"); return; }
+        const list = getCharList();
+        if (list.some(c => c.name.toLowerCase() === name.toLowerCase())) {
+            log("Já existe um personagem com esse nome.", "var(--btn-red)");
+            return;
+        }
+        const id = 'char_' + Date.now() + Math.floor(Math.random() * 1000);
+        list.push({ id, name, createdAt: Date.now() });
+        saveCharList(list);
+
+        p = defaultCharacterState();
+        activeCharId = id;
+        localStorage.setItem('heroQuestActiveChar', id);
+        save();
+        input.value = '';
+        closeCharSelect(true);
+        document.getElementById('class-selection').style.display = 'flex';
+    }
+
+    function deleteCharacter(id, name) {
+        showConfirm(`Apagar "${name}"? Perdes todo o progresso deste personagem.`, () => {
+            localStorage.removeItem(charStorageKey(id));
+            saveCharList(getCharList().filter(c => c.id !== id));
+            if (activeCharId === id) {
+                activeCharId = null;
+                localStorage.removeItem('heroQuestActiveChar');
+            }
+            renderCharList();
+        });
+    }
+
+    function renderCharList() {
+        const list = getCharList();
+        const container = document.getElementById('char-list');
+        container.innerHTML = '';
+        if (list.length === 0) {
+            container.innerHTML = '<p style="color:#888; text-align:center;">Ainda não tens personagens. Cria um abaixo.</p>';
+            return;
+        }
+        list.forEach(c => {
+            let info = 'Por escolher classe';
+            try {
+                const raw = localStorage.getItem(charStorageKey(c.id));
+                if (raw) {
+                    const cp = JSON.parse(raw);
+                    if (cp.class) info = `${cp.class} · Nível ${cp.lvl}`;
+                }
+            } catch (e) { /* ignora saves ilegíveis na pré-visualização */ }
+
+            const div = document.createElement('div');
+            div.className = 'char-card';
+            div.innerHTML = `<div><b>${c.name}</b><br><small style="color:#aaa;">${info}</small></div>`;
+            const delBtn = document.createElement('button');
+            delBtn.className = 'char-del';
+            delBtn.innerText = 'Apagar';
+            delBtn.onclick = (e) => { e.stopPropagation(); deleteCharacter(c.id, c.name); };
+            div.appendChild(delBtn);
+            div.onclick = () => loadCharacter(c.id);
+            container.appendChild(div);
+        });
+    }
+
+    // Abre o ecrã de seleção de personagens, guardando primeiro o progresso do personagem atual (se houver)
+    function openCharSelect() {
+        if (activeCharId && p.class) save();
+        renderCharList();
+        document.getElementById('char-select-screen').classList.add('visible');
+        document.getElementById('btn-close-char-select').style.display = activeCharId ? 'inline-block' : 'none';
+    }
+
+    // force=true permite fechar mesmo vindo de dentro do próprio fluxo de troca (após escolher/criar)
+    function closeCharSelect(force) {
+        if (!activeCharId && !force) return; // não deixa fechar sem nenhum personagem escolhido
+        document.getElementById('char-select-screen').classList.remove('visible');
     }
 
     function initClass(className) {
@@ -654,6 +806,8 @@
             let rewardTxt = [];
             if (a.reward.gold) { p.gold += a.reward.gold; p.stats.goldEarned += a.reward.gold; rewardTxt.push(`+${a.reward.gold} Ouro`); }
             if (a.reward.points) { p.points += a.reward.points; rewardTxt.push(`+${a.reward.points} Pontos`); }
+            const bonus = ACHIEVEMENT_TIER_BONUS[a.tier] || 0;
+            if (bonus > 0) rewardTxt.push(`+${bonus} em todos os atributos (permanente)`);
             log(`CONQUISTA: ${a.name}! ${rewardTxt.join(', ')}`, "var(--gold)");
             sfxLevelUp();
         });
@@ -799,6 +953,8 @@
 
     function getTotalAttr(type) {
         let base = (type === 'vit') ? p.maxHp : (p[type] || 0);
+
+        base += getAchievementBonus(); // bónus permanente de conquistas, igual em todos os atributos
 
         Object.values(p.equip).forEach(item => {
             if (item && item.bonuses && item.bonuses[type]) {
@@ -1015,6 +1171,8 @@
 
     function updateUI() {
         document.getElementById('display-class').innerText = p.class || "...";
+        const charInfo = activeCharId ? (getCharList().find(c => c.id === activeCharId) || null) : null;
+        document.getElementById('display-char-name').innerText = charInfo ? charInfo.name : '';
         document.getElementById('lvl').innerText = p.lvl;
         document.getElementById('gold').innerText = p.gold;
         document.getElementById('xp').innerText = p.xp;
@@ -1153,13 +1311,15 @@
         document.getElementById('stat-enchants').innerText = p.stats.enchantsDone;
         document.getElementById('stat-gold').innerText = p.stats.goldEarned;
         document.getElementById('stat-xp').innerText = p.stats.xpEarned;
+        document.getElementById('stat-achv-bonus').innerText = `+${getAchievementBonus()} em todos os atributos`;
 
         const achvL = document.getElementById('achv-list'); achvL.innerHTML = '';
         ACHIEVEMENTS.forEach(a => {
             const done = !!p.achievements[a.id];
+            const bonus = ACHIEVEMENT_TIER_BONUS[a.tier] || 0;
             const div = document.createElement('div');
             div.className = 'achv-card' + (done ? ' done' : '');
-            div.innerHTML = `<div class="achv-title${done ? ' done' : ''}">${done ? '✓ ' : ''}${a.name}</div><small>${a.desc}</small>`;
+            div.innerHTML = `<div class="achv-title${done ? ' done' : ''}">${done ? '✓ ' : ''}${a.name} <small style="color:#888; font-weight:normal;">(${TIER_LABELS[a.tier]}, +${bonus} atributos)</small></div><small>${a.desc}</small>`;
             achvL.appendChild(div);
         });
 
@@ -1285,8 +1445,11 @@
     }
 
     function resetGame() {
-        showConfirm("Reset? Vais perder todo o progresso.", () => {
-            localStorage.removeItem('heroQuestFinalSave');
+        if (!activeCharId) return;
+        showConfirm("Reset? Vais perder todo o progresso deste personagem (os outros personagens não são afetados).", () => {
+            localStorage.removeItem(charStorageKey(activeCharId));
+            saveCharList(getCharList().filter(c => c.id !== activeCharId));
+            localStorage.removeItem('heroQuestActiveChar');
             location.reload();
         });
     }
@@ -1315,7 +1478,7 @@
                 if (!imported || typeof imported !== 'object' || !imported.class) {
                     throw new Error('Ficheiro inválido');
                 }
-                showConfirm("Importar este save vai substituir o progresso atual. Continuar?", () => {
+                showConfirm("Importar este save vai substituir o progresso do personagem atual. Continuar?", () => {
                     p = imported;
                     migrateSave();
                     document.getElementById('class-selection').style.display = 'none';
@@ -1376,7 +1539,15 @@
 
     document.getElementById('btn-sound').innerText = soundMuted ? '🔇' : '🔊';
 
-    load();
+    // Arranque: converte um save antigo de personagem único (se existir) e continua o último
+    // personagem jogado; se não houver nenhum personagem ativo, mostra o ecrã de seleção.
+    migrateOldSingleSave();
+    const savedActiveChar = localStorage.getItem('heroQuestActiveChar');
+    if (savedActiveChar && localStorage.getItem(charStorageKey(savedActiveChar))) {
+        loadCharacter(savedActiveChar);
+    } else {
+        openCharSelect();
+    }
 
     if ('serviceWorker' in navigator) {
     navigator.serviceWorker.register('sw.js');

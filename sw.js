@@ -1,6 +1,6 @@
 self.addEventListener('install', (e) => {
   e.waitUntil(
-    caches.open('hero-quest-v4').then((cache) => {
+    caches.open('hero-quest-v5').then((cache) => {
       return cache.addAll(['index.html', 'manifest.json', 'icon-192.png', 'icon-512.png']);
     })
   );
@@ -9,7 +9,7 @@ self.addEventListener('install', (e) => {
 self.addEventListener('activate', (e) => {
   e.waitUntil(
     caches.keys().then((keys) =>
-      Promise.all(keys.filter((k) => k !== 'hero-quest-v4').map((k) => caches.delete(k)))
+      Promise.all(keys.filter((k) => k !== 'hero-quest-v5').map((k) => caches.delete(k)))
     )
   );
 });
