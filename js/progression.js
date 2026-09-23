@@ -107,10 +107,64 @@
 
     function getPrestigeMultiplier() { return 1 + p.prestige * 0.05; }
 
+    // --- Loja/Árvore de Prestígio (Pontos de Prestígio, 1 ganho a cada Prestígio) ---
+    // Perks propositadamente à parte de dano/atributos (isso já é o papel de Talentos/Perícias),
+    // para dar utilidade ao Prestígio a longo prazo sem inflacionar o poder de combate.
+    const PRESTIGE_PERKS = {
+        tenacidade: { name: 'Tenacidade',         icon: '💪', desc: '+1 tentativa base contra o Boss por ponto',        perPoint: 1, max: 3,  flat: true, unit: ' tentativas' },
+        cacador:    { name: 'Caçador Incansável', icon: '⏳', desc: '-2% no tempo de reaparecimento do Boss por ponto', perPoint: 2, max: 10 },
+        barganha:   { name: 'Barganha Eterna',    icon: '💰', desc: '-3% no preço dos itens da Loja por ponto',        perPoint: 3, max: 10 },
+        bolso:      { name: 'Bolso Dimensional',  icon: '🎒', desc: '+1 slot de mochila por ponto',                    perPoint: 1, max: 10, flat: true, unit: ' slots' }
+    };
+
+    function getPrestigePerkPoints(key) { return (p.prestigePerks && p.prestigePerks[key]) || 0; }
+    function getPrestigePerkPercent(key) {
+        const info = PRESTIGE_PERKS[key];
+        if (!info) return 0;
+        return getPrestigePerkPoints(key) * info.perPoint;
+    }
+    function addPrestigePerk(key) {
+        const info = PRESTIGE_PERKS[key];
+        if (!info) return;
+        if ((p.prestigePoints || 0) <= 0) { log("Não tens Pontos de Prestígio disponíveis.", "var(--btn-red)"); return; }
+        const cur = getPrestigePerkPoints(key);
+        if (cur >= info.max) { log(`${info.name} já está no máximo.`, "var(--btn-red)"); return; }
+        p.prestigePoints--;
+        p.prestigePerks[key] = cur + 1;
+        sfxClick();
+        updateUI();
+    }
+
+    function getPrestigePerkBossAttempts() { return getPrestigePerkPoints('tenacidade') * (PRESTIGE_PERKS.tenacidade.perPoint || 1); }
+    function getPrestigePerkBossCooldownMultiplier() { return 1 - getPrestigePerkPercent('cacador') / 100; }
+    function getPrestigePerkShopDiscount() { return 1 - getPrestigePerkPercent('barganha') / 100; }
+    function getPrestigePerkBackpackSlots() { return getPrestigePerkPoints('bolso') * (PRESTIGE_PERKS.bolso.perPoint || 1); }
+
+    function renderPrestigeShopBox() {
+        const box = document.getElementById('prestige-shop-box');
+        if (!box) return;
+        let html = `<p style="font-size:0.8em; color:#aaa; margin:0 0 8px 0;">Pontos de Prestígio disponíveis: <b style="color:var(--gold);">${p.prestigePoints || 0}</b></p>`;
+        Object.keys(PRESTIGE_PERKS).forEach(key => {
+            const info = PRESTIGE_PERKS[key];
+            const cur = getPrestigePerkPoints(key);
+            const atMax = cur >= info.max;
+            const canBuy = (p.prestigePoints || 0) > 0 && !atMax;
+            const val = (cur * info.perPoint);
+            const valTxt = (Math.round(val * 100) / 100).toString();
+            const suffix = info.flat ? (info.unit || '') : '%';
+            html += `<div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px; background:#3a3a3a; padding:6px 10px; border-radius:4px;">
+                <span title="${info.desc}">${info.icon} ${info.name}: <b>${cur}/${info.max}</b> <small style="color:#8f8;">(${info.flat ? '+' : '-'}${valTxt}${suffix})</small></span>
+                <button onclick="addPrestigePerk('${key}')" ${canBuy ? '' : 'disabled'} style="width:28px; height:28px; background:${canBuy ? '#4caf50' : '#666'}; color:white; border:none; cursor:${canBuy ? 'pointer' : 'not-allowed'}; border-radius:50%; font-weight:bold;">+</button>
+            </div>`;
+        });
+        box.innerHTML = html;
+    }
+
     function doPrestige() {
         if (p.lvl < PRESTIGE_LEVEL_REQ) return;
-        showConfirm(`Fazer Prestígio? Perdes nível, XP, Ouro e atributos base, mas ganhas +5% de Ouro/XP permanente (atual: +${p.prestige * 5}% -> +${(p.prestige + 1) * 5}%). Equipamento e mochila mantêm-se.`, () => {
+        showConfirm(`Fazer Prestígio? Perdes nível, XP, Ouro e atributos base, mas ganhas +5% de Ouro/XP permanente (atual: +${p.prestige * 5}% -> +${(p.prestige + 1) * 5}%) e +1 Ponto de Prestígio para a Loja de Prestígio. Equipamento e mochila mantêm-se.`, () => {
             p.prestige++;
+            p.prestigePoints = (p.prestigePoints || 0) + 1;
             const cls = p.class;
             p.lvl = 1; p.xp = 0; p.nextLvl = 100; p.points = 0; p.gold = 50; p.arenaRank = 1;
             p.str = 5; p.dex = 5; p.int = 5; p.luk = 1;
@@ -119,7 +173,10 @@
             else if (cls === 'Assassino') { p.maxHp = 100; p.dex = 15; }
             else if (cls === 'Mago') { p.maxHp = 70; p.int = 20; }
             p.hp = p.maxHp;
-            p.boss = { hp: 0, maxHp: 0, dmg: 0, attempts: 5, nextSpawn: 0, active: false, depletedAt: 0 };
+            // Limpa qualquer luta em curso (para não ficares preso contra um Boss antigo com atributos reiniciados),
+            // mas NÃO reinicia o nextSpawn: o cooldown de 3 dias do World Boss continua a contar através do Prestígio,
+            // para o Prestígio não poder ser usado para gerar Bosses grátis e sem espera.
+            p.boss.hp = 0; p.boss.maxHp = 0; p.boss.dmg = 0; p.boss.attempts = 5; p.boss.active = false; p.boss.depletedAt = 0;
 
             log(`PRESTÍGIO! Agora tens +${p.prestige * 5}% de Ouro e XP para sempre.`, "var(--gold)");
             generateNewQuests();

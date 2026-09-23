@@ -24,6 +24,9 @@
         { id: 'enchant_10', name: 'Ferreiro Arcano', desc: 'Encanta 10 itens.', tier: 'medium', cond: () => p.stats.enchantsDone >= 10, reward: { gold: 200 } },
         { id: 'streak_7', name: 'Hábito Heróico', desc: 'Joga 7 dias seguidos.', tier: 'medium', cond: () => p.loginStreak >= 7, reward: { gold: 300 } },
         { id: 'prestige_1', name: 'Recomeço Lendário', desc: 'Faz o teu primeiro Prestígio.', tier: 'complex', cond: () => p.prestige >= 1, reward: { gold: 100 } },
+        { id: 'prestige_5', name: 'Ciclo Eterno', desc: 'Atinge Prestígio 5.', tier: 'complex', cond: () => p.prestige >= 5, reward: { gold: 500, prestigePoints: 3 } },
+        { id: 'prestige_10', name: 'Além da Lenda', desc: 'Atinge Prestígio 10.', tier: 'complex', cond: () => p.prestige >= 10, reward: { gold: 1000, prestigePoints: 5 } },
+        { id: 'prestige_20', name: 'Transcendente', desc: 'Atinge Prestígio 20.', tier: 'complex', cond: () => p.prestige >= 20, reward: { gold: 2500, prestigePoints: 10 } },
         { id: 'gold_5000', name: 'Magnata', desc: 'Acumula 5000 de Ouro ganho ao longo do jogo.', tier: 'medium', cond: () => p.stats.goldEarned >= 5000, reward: { gold: 100 } },
         { id: 'unique_1', name: 'Lenda em Formação', desc: 'Equipa 1 Item Único.', tier: 'complex', cond: () => Object.values(p.equip).some(it => it && it.unique), reward: { gold: 300 } },
         { id: 'unique_3', name: 'Coleção Lendária', desc: 'Equipa 3 Itens Únicos ao mesmo tempo.', tier: 'complex', cond: () => Object.values(p.equip).filter(it => it && it.unique).length >= 3, reward: { gold: 600, points: 5 } },
@@ -46,6 +49,7 @@
             let rewardTxt = [];
             if (a.reward.gold) { p.gold += a.reward.gold; p.stats.goldEarned += a.reward.gold; rewardTxt.push(`+${a.reward.gold} Ouro`); }
             if (a.reward.points) { p.points += a.reward.points; rewardTxt.push(`+${a.reward.points} Pontos`); }
+            if (a.reward.prestigePoints) { p.prestigePoints = (p.prestigePoints || 0) + a.reward.prestigePoints; rewardTxt.push(`+${a.reward.prestigePoints} Pontos de Prestígio`); }
             const bonus = ACHIEVEMENT_TIER_BONUS[a.tier] || 0;
             if (bonus > 0) rewardTxt.push(`+${bonus} em todos os atributos (permanente)`);
             log(`CONQUISTA: ${a.name}! ${rewardTxt.join(', ')}`, "var(--gold)");

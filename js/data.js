@@ -6,6 +6,7 @@
     const INV_CAPACITY_PER_PURCHASE = 2; // slots ganhos por cada compra de expansão de mochila
     const SHOP_REFRESH_INTERVAL = 5 * 60 * 1000; // 5 minutos
     const PRESTIGE_LEVEL_REQ = 10;
+    const BOSS_RESPAWN_TIME = 3 * 24 * 60 * 60 * 1000; // 3 dias (reduzível pela Perk de Prestígio "Caçador Incansável")
 
     const missionNames = ["Caçar Ratos", "Limpar Esgotos", "Escolta Real", "Colher Ervas", "Roubar os Planos", "Matar Slimes", "Pescar", "Treinar Tropas", "Explorar Mina"];
 

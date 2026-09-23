@@ -132,6 +132,9 @@
         btnPrestige.disabled = p.lvl < PRESTIGE_LEVEL_REQ;
         btnPrestige.innerText = p.lvl < PRESTIGE_LEVEL_REQ ? `Fazer Prestígio (requer Nível ${PRESTIGE_LEVEL_REQ})` : 'Fazer Prestígio';
 
+        // Loja de Prestígio
+        renderPrestigeShopBox();
+
         // Atributos
         const attrList = document.getElementById('attr-list'); attrList.innerHTML = '';
 
@@ -304,10 +307,10 @@
             document.getElementById('action-info').innerHTML += compareHtml;
 
             if (item.bonuses && Object.keys(item.bonuses).length > 0) {
-                const cost = 50 * Object.keys(item.bonuses).length;
+                const cost = getEnchantCost(item);
                 enchantBtn.style.display = 'block';
-                enchantBtn.innerText = `Encantar (${cost}G)`;
-                enchantBtn.onclick = () => enchantItem(idx);
+                enchantBtn.innerText = `Encantar (${cost}G/vez)`;
+                enchantBtn.onclick = () => showEnchantChoice(idx);
             } else {
                 enchantBtn.style.display = 'none';
             }

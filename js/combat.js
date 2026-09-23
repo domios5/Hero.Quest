@@ -9,7 +9,7 @@
             p.boss.maxHp = p.lvl * 1000;
             p.boss.hp = p.boss.maxHp;
             p.boss.dmg = p.lvl * 15; // Dano do boss escala com o nível DELE, não com a tua vida
-            p.boss.attempts = 5;
+            p.boss.attempts = 5 + getPrestigePerkBossAttempts(); // Perk de Prestígio "Tenacidade"
             p.boss.active = true;
             p.boss.depletedAt = 0;
             p.boss.shieldHitsUsed = 0; // reinicia o Escudo Arcano (Mago) para esta nova aparição
@@ -24,7 +24,7 @@
             if (Date.now() - p.boss.depletedAt >= BOSS_FLEE_TIME) {
                 p.boss.active = false;
                 p.boss.depletedAt = 0;
-                p.boss.nextSpawn = Date.now() + (3 * 24 * 60 * 60 * 1000);
+                p.boss.nextSpawn = Date.now() + (BOSS_RESPAWN_TIME * getPrestigePerkBossCooldownMultiplier());
                 log("O Boss fugiu enquanto recuperavas forças! Vai demorar a aparecer outro.", "var(--btn-red)");
             }
         }
@@ -136,7 +136,7 @@
             p.boss.hp = 0;
             p.boss.active = false;
             p.boss.depletedAt = 0;
-            p.boss.nextSpawn = Date.now() + (3 * 24 * 60 * 60 * 1000); // 3 dias
+            p.boss.nextSpawn = Date.now() + (BOSS_RESPAWN_TIME * getPrestigePerkBossCooldownMultiplier()); // 3 dias, reduzíveis pela Perk "Caçador Incansável"
 
             // Recompensas (com multiplicador de Prestígio, Talento, Perícias e Companion)
             const gEarn = Math.floor(p.lvl * 500 * getPrestigeMultiplier() * getTalentGoldMultiplier() * getPericiaGoldMultiplier() * getCompanionGoldMultiplier());

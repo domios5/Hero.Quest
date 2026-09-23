@@ -22,6 +22,8 @@
             },
             ability: { lastUsed: 0 },
             prestige: 0,
+            prestigePoints: 0, // Pontos de Prestígio (1 ganho a cada Prestígio), gastos na Loja de Prestígio
+            prestigePerks: {}, // { chave_perk: pontos_investidos }
             buffs: { dmgBoostNext: false },
             lastActiveAt: 0,
             lastLoginDay: null, // string "YYYY-MM-DD" do último dia em que o jogo foi aberto
@@ -85,6 +87,8 @@
         if (p.boss.shieldHitsUsed === undefined) p.boss.shieldHitsUsed = 0;
         if (!p.ability) p.ability = { lastUsed: 0 };
         if (p.prestige === undefined) p.prestige = 0;
+        if (p.prestigePoints === undefined) p.prestigePoints = 0;
+        if (!p.prestigePerks) p.prestigePerks = {};
         if (!p.buffs) p.buffs = { dmgBoostNext: false };
         if (p.shopRefreshAt === undefined) p.shopRefreshAt = 0;
         if (!Array.isArray(p.inv)) p.inv = [];

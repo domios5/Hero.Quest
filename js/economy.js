@@ -86,7 +86,7 @@
     // Capacidade total = base + expansões compradas com Ouro (custo cresce por compra) + pontos
     // investidos na Perícia "Mochila Expandida" (+1 slot/ponto).
     function getInvCapacity() {
-        return INV_CAPACITY_BASE + (p.invCapacityPurchases || 0) * INV_CAPACITY_PER_PURCHASE + getPericiaBackpackSlots();
+        return INV_CAPACITY_BASE + (p.invCapacityPurchases || 0) * INV_CAPACITY_PER_PURCHASE + getPericiaBackpackSlots() + getPrestigePerkBackpackSlots();
     }
     function getInvCapacityCost() {
         const n = p.invCapacityPurchases || 0;
@@ -180,19 +180,60 @@
         });
     }
 
-    function enchantItem(idx) {
+    function getEnchantCost(item) {
+        if (!item || !item.bonuses) return 0;
+        return 50 * Object.keys(item.bonuses).length;
+    }
+
+    // Abre uma janela para escolher quantos encantamentos aplicar de seguida (1x, 5x ou 10x),
+    // em vez de teres de clicar "Encantar" repetidamente e confirmar cada vez.
+    function showEnchantChoice(idx) {
         const item = p.inv[idx];
         if (!item || !item.bonuses || Object.keys(item.bonuses).length === 0) return;
-        const cost = 50 * Object.keys(item.bonuses).length;
-        if (p.gold < cost) { log("Ouro insuficiente para encantar.", "var(--btn-red)"); return; }
-        showConfirm(`Encantar ${item.name} por ${cost} Ouro?`, () => {
-            p.gold -= cost;
-            const keys = Object.keys(item.bonuses);
-            const k = keys[Math.floor(Math.random() * keys.length)];
-            const boost = Math.floor(Math.random() * 3) + 1;
-            item.bonuses[k] += boost;
-            p.stats.enchantsDone++;
-            log(`${item.name} encantado! +${boost} ${(attrNames[k] || k.toUpperCase())}.`, "var(--accent)");
+        const costEach = getEnchantCost(item);
+        const options = [1, 5, 10];
+        const overlay = document.createElement('div');
+        overlay.style = 'position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.7); z-index:200; display:flex; align-items:center; justify-content:center;';
+        const btnsHtml = options.map(n => {
+            const cost = costEach * n;
+            const affordable = p.gold >= cost;
+            return `<button data-times="${n}" ${affordable ? '' : 'disabled'} style="background:${affordable ? '#8e44ad' : '#555'};">Encantar ${n}x (${cost} Ouro)</button>`;
+        }).join('');
+        overlay.innerHTML = `
+            <div style="background:#2c2c2c; border:2px solid #555; border-radius:10px; padding:20px; max-width:300px; text-align:center;">
+                <p style="margin:0 0 15px 0;">Quantas vezes queres encantar <b>${item.name}</b>?</p>
+                <div style="display:flex; flex-direction:column; gap:8px;">${btnsHtml}</div>
+                <button id="enchant-choice-cancel" style="background:#a32a2a; margin-top:10px;">Cancelar</button>
+            </div>`;
+        document.body.appendChild(overlay);
+        options.forEach(n => {
+            const btn = overlay.querySelector(`button[data-times="${n}"]`);
+            if (btn) btn.onclick = () => { document.body.removeChild(overlay); enchantItem(idx, n); };
+        });
+        overlay.querySelector('#enchant-choice-cancel').onclick = () => document.body.removeChild(overlay);
+    }
+
+    function enchantItem(idx, times) {
+        times = times || 1;
+        const item = p.inv[idx];
+        if (!item || !item.bonuses || Object.keys(item.bonuses).length === 0) return;
+        const costEach = getEnchantCost(item);
+        const totalCost = costEach * times;
+        if (p.gold < totalCost) { log("Ouro insuficiente para encantar.", "var(--btn-red)"); return; }
+        const label = times > 1 ? `Encantar ${item.name} ${times}x por ${totalCost} Ouro?` : `Encantar ${item.name} por ${totalCost} Ouro?`;
+        showConfirm(label, () => {
+            p.gold -= totalCost;
+            const gained = {}; // soma por atributo, para um único log resumido em vez de ${times} linhas
+            for (let i = 0; i < times; i++) {
+                const keys = Object.keys(item.bonuses);
+                const k = keys[Math.floor(Math.random() * keys.length)];
+                const boost = Math.floor(Math.random() * 3) + 1;
+                item.bonuses[k] += boost;
+                gained[k] = (gained[k] || 0) + boost;
+            }
+            p.stats.enchantsDone += times;
+            const boostTxt = Object.keys(gained).map(k => `+${gained[k]} ${(attrNames[k] || k.toUpperCase())}`).join(', ');
+            log(`${item.name} encantado${times > 1 ? ` ${times}x` : ''}! ${boostTxt}.`, "var(--accent)");
             sfxLoot();
             document.getElementById('item-actions').style.display = 'none';
             updateUI();
@@ -225,7 +266,7 @@
         updateUI();
     }
 
-    function getShopPrice(basePrice) { return Math.max(1, Math.floor(basePrice * getTalentShopDiscount())); }
+    function getShopPrice(basePrice) { return Math.max(1, Math.floor(basePrice * getTalentShopDiscount() * getPrestigePerkShopDiscount())); }
 
     function buyItem(idx) {
         const it = p.shopItems[idx];
