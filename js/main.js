@@ -1,6 +1,28 @@
 // js/main.js — Som (Web Audio), instalação PWA, janelas de confirmação/aviso, e arranque do jogo.
 
 
+    // --- Premir e segurar para repetir uma ação (botões "+" de Perícias, Loja de Prestígio,
+    // Atributos e Mochila) --- Um único temporizador global chega, porque só pode haver uma
+    // ação a repetir de cada vez; ao soltar o rato/dedo (em qualquer sítio, mesmo fora do botão
+    // original, o que importa quando o botão é substituído a meio por um updateUI()), para logo.
+    let holdRepeatTimer = null;
+    function startHoldRepeat(action) {
+        stopHoldRepeat();
+        action(); // primeiro clique/toque atua de imediato, tal como um clique normal
+        holdRepeatTimer = setTimeout(function repeatStep() {
+            action();
+            holdRepeatTimer = setTimeout(repeatStep, 80);
+        }, 350); // espera 350ms antes de começar a repetir, para não confundir um clique normal
+    }
+    function stopHoldRepeat() {
+        clearTimeout(holdRepeatTimer);
+        holdRepeatTimer = null;
+    }
+    document.addEventListener('mouseup', stopHoldRepeat);
+    document.addEventListener('mouseleave', stopHoldRepeat);
+    document.addEventListener('touchend', stopHoldRepeat);
+    document.addEventListener('touchcancel', stopHoldRepeat);
+
     // Janela de confirmação própria do jogo (evita depender do confirm() nativo do
     // browser, que alguns browsers deixam de mostrar depois de vários usos na mesma página)
     function showConfirm(message, onYes) {

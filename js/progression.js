@@ -38,11 +38,15 @@
     // Sistema de 9 perícias passivas, cada uma com um limite de pontos investidos e um efeito por
     // ponto. Guardadas em p.pericias = { chave: pontosInvestidos }. A maioria tem efeito percentual
     // (flat: false/omitido); "Mochila Expandida" é uma exceção com efeito plano (+N slots, sem %).
+    // Vitalidade Extra, Poder Ofensivo e Fortitude não têm limite de pontos (max: Infinity) — são as
+    // únicas 3 cuja escala nunca "quebra" o jogo mesmo sem teto (mais HP/dano nunca é um problema).
+    // As restantes ficam com limite porque atingem 100% (esquiva, duração, loot) de forma perigosa —
+    // Regeneração Rápida sem limite, por exemplo, tornaria as missões instantâneas.
     const PERICIAS = {
-        vitalidade_extra:  { name: 'Vitalidade Extra',      icon: '❤️', desc: '+1% de HP máximo por ponto',              perPoint: 1,   max: 20 },
-        poder_ofensivo:    { name: 'Poder Ofensivo',        icon: '⚔️', desc: '+1% de dano em combate por ponto',        perPoint: 1,   max: 20 },
-        fortitude:         { name: 'Fortitude',             icon: '🛡️', desc: '-1% de dano recebido por ponto',          perPoint: 1,   max: 20 },
-        regeneracao_rapida:{ name: 'Regeneração Rápida',    icon: '⏱️', desc: '-1% de duração das missões por ponto',    perPoint: 1,   max: 20 },
+        vitalidade_extra:  { name: 'Vitalidade Extra',      icon: '❤️', desc: '+1% de HP máximo por ponto (sem limite)',        perPoint: 1,   max: Infinity },
+        poder_ofensivo:    { name: 'Poder Ofensivo',        icon: '⚔️', desc: '+1% de dano em combate por ponto (sem limite)',  perPoint: 1,   max: Infinity },
+        fortitude:         { name: 'Fortitude',             icon: '🛡️', desc: '-1% de dano recebido por ponto (sem limite)',    perPoint: 1,   max: Infinity },
+        regeneracao_rapida:{ name: 'Regeneração Rápida',    icon: '⏱️', desc: '-1% de duração das missões por ponto (até 100%, missões instantâneas)', perPoint: 1, max: 100 },
         fortuna:           { name: 'Fortuna',               icon: '🍀', desc: '+1% de Ouro ganho por ponto',             perPoint: 1,   max: 20 },
         sabedoria:         { name: 'Sabedoria',             icon: '📚', desc: '+1% de XP ganho por ponto',               perPoint: 1,   max: 20 },
         instinto_saque:    { name: 'Instinto de Saque',     icon: '🎯', desc: '+0.5% de hipótese de loot por ponto',     perPoint: 0.5, max: 20 },
@@ -72,8 +76,12 @@
 
     // Multiplicadores/derivados de cada perícia, combinados multiplicativamente com Talentos e Companion
     function getPericiaDamageMultiplier() { return 1 + getPericiaPercent('poder_ofensivo') / 100; }
-    function getPericiaDefenseMultiplier() { return 1 - getPericiaPercent('fortitude') / 100; } // multiplica o dano RECEBIDO
-    function getPericiaDurationMultiplier() { return 1 - getPericiaPercent('regeneracao_rapida') / 100; }
+    // Multiplica o dano RECEBIDO. Fortitude não tem limite de pontos, por isso o multiplicador é
+    // sempre travado a um mínimo de 5% do dano original — nunca fica a 0% (invencível) ou negativo.
+    function getPericiaDefenseMultiplier() { return Math.max(0.05, 1 - getPericiaPercent('fortitude') / 100); }
+    // Vai até 100 pontos (100%), o que torna as missões instantâneas; o Math.max é só uma rede de
+    // segurança para nunca passar a duração para negativo.
+    function getPericiaDurationMultiplier() { return Math.max(0, 1 - getPericiaPercent('regeneracao_rapida') / 100); }
     function getPericiaGoldMultiplier() { return 1 + getPericiaPercent('fortuna') / 100; }
     function getPericiaXpMultiplier() { return 1 + getPericiaPercent('sabedoria') / 100; }
     function getPericiaLootBonus() { return getPericiaPercent('instinto_saque') / 100; } // somado diretamente à hipótese de loot
@@ -97,9 +105,10 @@
             const val = (cur * info.perPoint);
             const valTxt = (Math.round(val * 100) / 100).toString();
             const suffix = info.flat ? (info.unit || '') : '%';
-            html += `<div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px; background:#3a3a3a; padding:6px 10px; border-radius:4px;">
-                <span title="${info.desc}">${info.icon} ${info.name}: <b>${cur}/${info.max}</b> <small style="color:#8f8;">(${info.flat ? '+' : ''}${valTxt}${suffix})</small></span>
-                <button onclick="addPericia('${key}')" ${canBuy ? '' : 'disabled'} style="width:28px; height:28px; background:${canBuy ? '#4caf50' : '#666'}; color:white; border:none; cursor:${canBuy ? 'pointer' : 'not-allowed'}; border-radius:50%; font-weight:bold;">+</button>
+            const maxTxt = info.max === Infinity ? '∞' : info.max;
+            html += `<div style="display:flex; flex-wrap:wrap; justify-content:space-between; align-items:center; gap:6px; margin-bottom:6px; background:#3a3a3a; padding:6px 10px; border-radius:4px;">
+                <span title="${info.desc}" style="flex:1 1 180px; min-width:0;">${info.icon} ${info.name}: <b>${cur}/${maxTxt}</b> <small style="color:#8f8;">(${info.flat ? '+' : ''}${valTxt}${suffix})</small></span>
+                <button onmousedown="startHoldRepeat(() => addPericia('${key}'))" ontouchstart="event.preventDefault(); startHoldRepeat(() => addPericia('${key}'))" ${canBuy ? '' : 'disabled'} style="flex-shrink:0; width:28px; height:28px; padding:0; margin-top:0; background:${canBuy ? '#4caf50' : '#666'}; color:white; border:none; cursor:${canBuy ? 'pointer' : 'not-allowed'}; border-radius:50%; font-weight:bold;">+</button>
             </div>`;
         });
         box.innerHTML = html;
@@ -152,9 +161,9 @@
             const val = (cur * info.perPoint);
             const valTxt = (Math.round(val * 100) / 100).toString();
             const suffix = info.flat ? (info.unit || '') : '%';
-            html += `<div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px; background:#3a3a3a; padding:6px 10px; border-radius:4px;">
-                <span title="${info.desc}">${info.icon} ${info.name}: <b>${cur}/${info.max}</b> <small style="color:#8f8;">(${info.flat ? '+' : '-'}${valTxt}${suffix})</small></span>
-                <button onclick="addPrestigePerk('${key}')" ${canBuy ? '' : 'disabled'} style="width:28px; height:28px; background:${canBuy ? '#4caf50' : '#666'}; color:white; border:none; cursor:${canBuy ? 'pointer' : 'not-allowed'}; border-radius:50%; font-weight:bold;">+</button>
+            html += `<div style="display:flex; flex-wrap:wrap; justify-content:space-between; align-items:center; gap:6px; margin-bottom:6px; background:#3a3a3a; padding:6px 10px; border-radius:4px;">
+                <span title="${info.desc}" style="flex:1 1 180px; min-width:0;">${info.icon} ${info.name}: <b>${cur}/${info.max}</b> <small style="color:#8f8;">(${info.flat ? '+' : '-'}${valTxt}${suffix})</small></span>
+                <button onmousedown="startHoldRepeat(() => addPrestigePerk('${key}'))" ontouchstart="event.preventDefault(); startHoldRepeat(() => addPrestigePerk('${key}'))" ${canBuy ? '' : 'disabled'} style="flex-shrink:0; width:28px; height:28px; padding:0; margin-top:0; background:${canBuy ? '#4caf50' : '#666'}; color:white; border:none; cursor:${canBuy ? 'pointer' : 'not-allowed'}; border-radius:50%; font-weight:bold;">+</button>
             </div>`;
         });
         box.innerHTML = html;

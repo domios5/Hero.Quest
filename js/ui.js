@@ -144,11 +144,11 @@
         ['str', 'vit', 'dex', 'int', 'luk'].forEach(a => {
             const row = document.createElement('div');
             row.className = "attr-row";
-            row.style = "display:flex; justify-content:space-between; align-items:center; margin-bottom:8px; background:#444; padding:8px 10px; border-radius:4px;";
+            row.style = "display:flex; flex-wrap:wrap; gap:6px; justify-content:space-between; align-items:center; margin-bottom:8px; background:#444; padding:8px 10px; border-radius:4px;";
             const cost = getAttrCost(a);
             const canAfford = p.gold >= cost;
             row.innerHTML = `<span>${attrNames[a]}: <b>${getTotalAttr(a)}</b></span>
-                 <button class="plus-btn" onclick="buyAttr('${a}')" ${canAfford ? '' : 'disabled'} title="Comprar +${a === 'vit' ? '20 HP máx' : '2'}" style="min-width:56px; height:28px; background:${canAfford ? '#c98a00' : '#666'}; color:white; border:none; cursor:${canAfford ? 'pointer' : 'not-allowed'}; border-radius:4px; font-weight:bold; font-size:0.75em; padding:0 6px;">💰${cost}</button>`;
+                 <button class="plus-btn" onmousedown="startHoldRepeat(() => buyAttr('${a}'))" ontouchstart="event.preventDefault(); startHoldRepeat(() => buyAttr('${a}'))" ${canAfford ? '' : 'disabled'} title="Comprar +${a === 'vit' ? '20 HP máx' : '2'}" style="min-width:56px; height:28px; background:${canAfford ? '#c98a00' : '#666'}; color:white; border:none; cursor:${canAfford ? 'pointer' : 'not-allowed'}; border-radius:4px; font-weight:bold; font-size:0.75em; padding:0 6px;">💰${cost}</button>`;
             attrList.appendChild(row);
         });
 
@@ -157,9 +157,9 @@
         if (capBox) {
             const capCost = getInvCapacityCost();
             const canAffordCap = p.gold >= capCost;
-            capBox.innerHTML = `<div style="display:flex; justify-content:space-between; align-items:center; background:#3a3a3a; padding:6px 10px; border-radius:4px;">
+            capBox.innerHTML = `<div style="display:flex; flex-wrap:wrap; gap:6px; justify-content:space-between; align-items:center; background:#3a3a3a; padding:6px 10px; border-radius:4px;">
                 <span>🎒 Capacidade: <b>${p.inv.length}/${getInvCapacity()}</b></span>
-                <button onclick="buyInvCapacity()" ${canAffordCap ? '' : 'disabled'} style="width:auto; padding:4px 8px; font-size:0.75em; margin-top:0; background:${canAffordCap ? '#c98a00' : '#666'};">Expandir (+${INV_CAPACITY_PER_PURCHASE}) — 💰${capCost}</button>
+                <button onmousedown="startHoldRepeat(buyInvCapacity)" ontouchstart="event.preventDefault(); startHoldRepeat(buyInvCapacity)" ${canAffordCap ? '' : 'disabled'} style="width:auto; padding:4px 8px; font-size:0.75em; margin-top:0; background:${canAffordCap ? '#c98a00' : '#666'};">Expandir (+${INV_CAPACITY_PER_PURCHASE}) — 💰${capCost}</button>
             </div>`;
         }
 
