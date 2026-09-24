@@ -25,6 +25,8 @@
             prestige: 0,
             prestigePoints: 0, // Pontos de Prestígio (1 ganho a cada Prestígio), gastos na Loja de Prestígio
             prestigePerks: {}, // { chave_perk: pontos_investidos }
+            runeDust: 0, // "Pó de Runa", moeda usada para melhorar runas já encaixadas — dropa do World Boss e da Arena
+            extractionStones: 0, // Pedras de Extração compradas na Loja, usadas para retirar uma runa sem a destruir
             buffs: { dmgBoostNext: false },
             lastActiveAt: 0,
             lastLoginDay: null, // string "YYYY-MM-DD" do último dia em que o jogo foi aberto
@@ -90,6 +92,8 @@
         if (p.boss.depletedAt === undefined) p.boss.depletedAt = 0;
         if (p.boss.shieldHitsUsed === undefined) p.boss.shieldHitsUsed = 0;
         if (!p.boss.dots) p.boss.dots = [];
+        if (p.runeDust === undefined) p.runeDust = 0;
+        if (p.extractionStones === undefined) p.extractionStones = 0;
         if (!p.ability) p.ability = { lastUsed: 0 };
         if (p.prestige === undefined) p.prestige = 0;
         if (p.prestigePoints === undefined) p.prestigePoints = 0;
@@ -296,7 +300,8 @@
 
         // Bónus percentuais de Itens Únicos equipados (statPercent aplica-se ao atributo específico;
         // hpPercent é o equivalente para vit, e soma-se ao mesmo percentual antes de arredondar).
-        let uniquePercent = getUniqueStatPercent(type) + (type === 'vit' ? getUniqueHpPercent() : 0);
+        // Runa de Vida ("vida") soma-se da mesma forma, só para vit.
+        let uniquePercent = getUniqueStatPercent(type) + (type === 'vit' ? getUniqueHpPercent() + getRunePercent('vida') : 0);
 
         if (type === 'vit') {
             base = Math.round(base * (1 + getPericiaPercent('vitalidade_extra') / 100) * (1 + uniquePercent / 100));

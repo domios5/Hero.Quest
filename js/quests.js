@@ -6,10 +6,10 @@
     // Perícias, Companion) — é exatamente a mesma fórmula usada em completeQuest(), só que
     // calculada aqui só para mostrar na card, sem aplicar nada.
     function getQuestFinalGold(q) {
-        return Math.floor(q.gold * (1 + getTotalAttr('dex') / 100) * getPrestigeMultiplier() * getTalentGoldMultiplier() * getPericiaGoldMultiplier() * getCompanionGoldMultiplier());
+        return Math.floor(q.gold * (1 + getTotalAttr('dex') / 100) * getPrestigeMultiplier() * getTalentGoldMultiplier() * getPericiaGoldMultiplier() * getCompanionGoldMultiplier() * getRuneGoldMultiplier());
     }
     function getQuestFinalXp(q) {
-        return Math.floor(q.xp * (1 + getTotalAttr('int') / 100) * getPrestigeMultiplier() * getTalentXpMultiplier() * getPericiaXpMultiplier() * getCompanionXpMultiplier());
+        return Math.floor(q.xp * (1 + getTotalAttr('int') / 100) * getPrestigeMultiplier() * getTalentXpMultiplier() * getPericiaXpMultiplier() * getCompanionXpMultiplier() * getRuneXpMultiplier());
     }
 
     // MISSÕES ALEATÓRIAS (CORRIGIDO)
@@ -76,8 +76,8 @@
         const isLegendary = q.type === 'legendary';
 
         // 1. Cálculo de bónus de Ouro e XP (com multiplicador de Prestígio, Talento, Perícias e Companion)
-        let fG = Math.floor(q.gold * (1 + getTotalAttr('dex') / 100) * getPrestigeMultiplier() * getTalentGoldMultiplier() * getPericiaGoldMultiplier() * getCompanionGoldMultiplier());
-        let fX = Math.floor(q.xp * (1 + getTotalAttr('int') / 100) * getPrestigeMultiplier() * getTalentXpMultiplier() * getPericiaXpMultiplier() * getCompanionXpMultiplier());
+        let fG = Math.floor(q.gold * (1 + getTotalAttr('dex') / 100) * getPrestigeMultiplier() * getTalentGoldMultiplier() * getPericiaGoldMultiplier() * getCompanionGoldMultiplier() * getRuneGoldMultiplier());
+        let fX = Math.floor(q.xp * (1 + getTotalAttr('int') / 100) * getPrestigeMultiplier() * getTalentXpMultiplier() * getPericiaXpMultiplier() * getCompanionXpMultiplier() * getRuneXpMultiplier());
         p.gold += fG; p.xp += fX;
         p.stats.goldEarned += fG; p.stats.xpEarned += fX;
         addCompanionXp(fX);
@@ -101,11 +101,20 @@
         if (isLegendary) sfxVictory(); else sfxClick();
 
         // 3. Sistema de Loot (chance maior nas missões Lendárias, + bónus de Instinto de Saque)
-        if (Math.random() < (isLegendary ? 0.5 : 0.15) + getPericiaLootBonus()) {
+        if (Math.random() < (isLegendary ? 0.5 : 0.15) + getPericiaLootBonus() + getRuneLootBonus()) {
             const item = createItem(p.lvl);
             if (addToInventory(item)) {
                 p.stats.itemsFound++;
                 log(`LOOT: Encontraste ${item.name}!`, "var(--accent)");
+                sfxLoot();
+            }
+        }
+
+        // Runas: só dropam em Aventura (missões) — nunca à venda na Loja
+        if (Math.random() < RUNE_DROP_CHANCE_QUEST) {
+            const rune = createRuneDrop();
+            if (addToInventory(rune)) {
+                log(`RUNA ENCONTRADA: ${rune.icon} ${rune.name}!`, "var(--accent)");
                 sfxLoot();
             }
         }

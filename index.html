@@ -55,12 +55,23 @@
     <div id="gear" class="tab-content">
         <h4>Equipamento</h4>
         <div class="equip-area">
-            <div class="slot" id="slot-weapon" onclick="unequip('weapon')">Arma<br><small id="name-weapon">Vazio</small></div>
-            <div class="slot" id="slot-armor" onclick="unequip('armor')">Armadura<br><small id="name-armor">Vazio</small></div>
-            <div class="slot" id="slot-amulet" onclick="unequip('amulet')">Colar<br><small id="name-amulet">Vazio</small></div>
-            <div class="slot" id="slot-ring" onclick="unequip('ring')">Anel<br><small id="name-ring">Vazio</small></div>
-            <div class="slot" id="slot-boots" onclick="unequip('boots')">Botas<br><small id="name-boots">Vazio</small></div>
-            <div class="slot" id="slot-cape" onclick="unequip('cape')">Capa<br><small id="name-cape">Vazio</small></div>
+            <div class="slot" id="slot-weapon" style="position:relative;"><span onclick="unequip('weapon')">Arma<br><small id="name-weapon">Vazio</small></span><button onclick="event.stopPropagation(); openRuneSocketPanel('weapon')" title="Runas" style="position:absolute; top:2px; right:2px; width:auto; padding:2px 5px; font-size:0.75em; background:#4a3d00;">🔮</button></div>
+            <div class="slot" id="slot-armor" style="position:relative;"><span onclick="unequip('armor')">Armadura<br><small id="name-armor">Vazio</small></span><button onclick="event.stopPropagation(); openRuneSocketPanel('armor')" title="Runas" style="position:absolute; top:2px; right:2px; width:auto; padding:2px 5px; font-size:0.75em; background:#4a3d00;">🔮</button></div>
+            <div class="slot" id="slot-amulet" style="position:relative;"><span onclick="unequip('amulet')">Colar<br><small id="name-amulet">Vazio</small></span><button onclick="event.stopPropagation(); openRuneSocketPanel('amulet')" title="Runas" style="position:absolute; top:2px; right:2px; width:auto; padding:2px 5px; font-size:0.75em; background:#4a3d00;">🔮</button></div>
+            <div class="slot" id="slot-ring" style="position:relative;"><span onclick="unequip('ring')">Anel<br><small id="name-ring">Vazio</small></span><button onclick="event.stopPropagation(); openRuneSocketPanel('ring')" title="Runas" style="position:absolute; top:2px; right:2px; width:auto; padding:2px 5px; font-size:0.75em; background:#4a3d00;">🔮</button></div>
+            <div class="slot" id="slot-boots" style="position:relative;"><span onclick="unequip('boots')">Botas<br><small id="name-boots">Vazio</small></span><button onclick="event.stopPropagation(); openRuneSocketPanel('boots')" title="Runas" style="position:absolute; top:2px; right:2px; width:auto; padding:2px 5px; font-size:0.75em; background:#4a3d00;">🔮</button></div>
+            <div class="slot" id="slot-cape" style="position:relative;"><span onclick="unequip('cape')">Capa<br><small id="name-cape">Vazio</small></span><button onclick="event.stopPropagation(); openRuneSocketPanel('cape')" title="Runas" style="position:absolute; top:2px; right:2px; width:auto; padding:2px 5px; font-size:0.75em; background:#4a3d00;">🔮</button></div>
+        </div>
+        <p style="font-size:0.75em; color:#888; margin:6px 0 0 0;">Clica no 🔮 de um slot para geri-lo. Pó de Runa: <b id="rune-dust-count" style="color:var(--gold);">0</b> · Pedras de Extração: <b id="extraction-stone-count" style="color:var(--gold);">0</b></p>
+
+        <!-- Modal de gestão de runas de uma peça de equipamento: ver/melhorar/extrair runas encaixadas
+             e encaixar novas runas a partir da mochila. Mesmo padrão visual dos outros modais. -->
+        <div id="rune-socket-overlay" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.7); z-index:200; align-items:center; justify-content:center; padding:16px; box-sizing:border-box;" onclick="if (event.target === this) closeRuneSocketPanel();">
+            <div style="background:#2c2c2c; border:2px solid #555; border-radius:10px; padding:16px; max-width:340px; width:100%; max-height:80vh; overflow-y:auto; box-sizing:border-box;">
+                <div id="rune-socket-title" style="font-weight:bold; margin-bottom:10px;"></div>
+                <div id="rune-socket-slots"></div>
+                <button onclick="closeRuneSocketPanel()" style="background:#555; margin-top:10px;">Fechar</button>
+            </div>
         </div>
 
         <h4>Habilidade</h4>
@@ -124,6 +135,7 @@
             <button onclick="manualRefreshShop()" style="width:auto; padding:5px 10px; background:#555;">Atualizar Loja (10 Ouro)</button>
         </div>
         <div id="potion-list"></div>
+        <div id="extraction-stone-box" style="margin-top:6px;"></div>
         <hr>
         <div id="shop-items"></div>
     </div>

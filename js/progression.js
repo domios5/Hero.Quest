@@ -8,7 +8,7 @@
     function getDexDodgeChance() { return Math.min(20, getTotalAttr('dex') * 0.25) / 100; }
 
     function getTotalCritChance() {
-        return 1 - (1 - getTalentCritChance()) * (1 - getLuckCritChance()) * (1 - getUniqueCritPercent() / 100);
+        return 1 - (1 - getTalentCritChance()) * (1 - getLuckCritChance()) * (1 - getUniqueCritPercent() / 100) * (1 - getRunePercent('critico') / 100);
     }
     // Multiplicador do crítico: se tiveres o talento Golpe Crítico mantém a escala atual (x2/x2.5
     // especializado); se o crítico só vier da Sorte, é um x1.5 mais modesto.
@@ -78,8 +78,9 @@
     function getPericiaDamageMultiplier() { return 1 + getPericiaPercent('poder_ofensivo') / 100; }
     // Multiplica o dano RECEBIDO. Fortitude não tem limite de pontos, por isso o multiplicador é
     // sempre travado a um mínimo de 5% do dano original — nunca fica a 0% (invencível) ou negativo.
-    // Inclui também a defesa % dos Itens Únicos equipados (Placas do Titã, Pedra Filosofal, ...).
-    function getPericiaDefenseMultiplier() { return Math.max(0.05, 1 - getPericiaPercent('fortitude') / 100 - getUniqueDefensePercent() / 100); }
+    // Inclui também a defesa % dos Itens Únicos equipados (Placas do Titã, Pedra Filosofal, ...) e
+    // das Runas de Defesa encaixadas.
+    function getPericiaDefenseMultiplier() { return Math.max(0.05, 1 - getPericiaPercent('fortitude') / 100 - getUniqueDefensePercent() / 100 - getRunePercent('defesa') / 100); }
     // Vai até 100 pontos (100%), o que torna as missões instantâneas; o Math.max é só uma rede de
     // segurança para nunca passar a duração para negativo.
     function getPericiaDurationMultiplier() { return Math.max(0, 1 - getPericiaPercent('regeneracao_rapida') / 100); }
@@ -91,8 +92,12 @@
     // Combina a esquiva de Talentos (Passos Silenciosos) com a de Perícias (Reflexos) como duas
     // hipóteses independentes: P(esquiva) = 1 - (1-A)*(1-B)
     function getTotalDodgeChance() {
-        return 1 - (1 - getTalentDodgeChance()) * (1 - getPericiaDodgeBonus()) * (1 - getDexDodgeChance()) * (1 - getUniqueDodgePercent() / 100);
+        return 1 - (1 - getTalentDodgeChance()) * (1 - getPericiaDodgeBonus()) * (1 - getDexDodgeChance()) * (1 - getUniqueDodgePercent() / 100) * (1 - getRunePercent('esquiva') / 100);
     }
+
+    function getRuneGoldMultiplier() { return 1 + getRunePercent('ouro') / 100; }
+    function getRuneXpMultiplier() { return 1 + getRunePercent('exp') / 100; }
+    function getRuneLootBonus() { return getRunePercent('sorte') / 100; } // somado diretamente à hipótese de loot, como a Perícia Instinto de Saque
 
     function renderPericiasBox() {
         const box = document.getElementById('pericias-box');
@@ -124,7 +129,10 @@
         tenacidade: { name: 'Tenacidade',         icon: '💪', desc: '+1 tentativa base contra o Boss por ponto',        perPoint: 1, max: 3,  flat: true, unit: ' tentativas' },
         cacador:    { name: 'Caçador Incansável', icon: '⏳', desc: '-2% no tempo de reaparecimento do Boss por ponto', perPoint: 2, max: 10 },
         barganha:   { name: 'Barganha Eterna',    icon: '💰', desc: '-3% no preço dos itens da Loja por ponto',        perPoint: 3, max: 10 },
-        bolso:      { name: 'Bolso Dimensional',  icon: '🎒', desc: '+1 slot de mochila por ponto',                    perPoint: 1, max: 10, flat: true, unit: ' slots' }
+        bolso:      { name: 'Bolso Dimensional',  icon: '🎒', desc: '+1 slot de mochila por ponto',                    perPoint: 1, max: 10, flat: true, unit: ' slots' },
+        // Compra única (cost:20) em vez do normal 1 ponto/nível — desbloqueia um 2º slot de runa em
+        // TODO o equipamento, de uma só vez.
+        runa_extra: { name: 'Engaste Duplo',      icon: '💎', desc: 'Desbloqueia um 2º slot de runa em todo o equipamento (compra única)', perPoint: 1, max: 1, flat: true, unit: ' slot extra', cost: 20 }
     };
 
     function getPrestigePerkPoints(key) { return (p.prestigePerks && p.prestigePerks[key]) || 0; }
@@ -136,10 +144,11 @@
     function addPrestigePerk(key) {
         const info = PRESTIGE_PERKS[key];
         if (!info) return;
-        if ((p.prestigePoints || 0) <= 0) { log("Não tens Pontos de Prestígio disponíveis.", "var(--btn-red)"); return; }
+        const cost = info.cost || 1;
+        if ((p.prestigePoints || 0) < cost) { log(`Precisas de ${cost} Ponto(s) de Prestígio disponíveis.`, "var(--btn-red)"); return; }
         const cur = getPrestigePerkPoints(key);
         if (cur >= info.max) { log(`${info.name} já está no máximo.`, "var(--btn-red)"); return; }
-        p.prestigePoints--;
+        p.prestigePoints -= cost;
         p.prestigePerks[key] = cur + 1;
         sfxClick();
         updateUI();
@@ -149,6 +158,8 @@
     function getPrestigePerkBossCooldownMultiplier() { return 1 - getPrestigePerkPercent('cacador') / 100; }
     function getPrestigePerkShopDiscount() { return 1 - getPrestigePerkPercent('barganha') / 100; }
     function getPrestigePerkBackpackSlots() { return getPrestigePerkPoints('bolso') * (PRESTIGE_PERKS.bolso.perPoint || 1); }
+    // 1 slot de runa por peça por omissão; +1 globalmente com o perk "Engaste Duplo".
+    function getRuneSlotCount() { return 1 + getPrestigePerkPoints('runa_extra'); }
 
     function renderPrestigeShopBox() {
         const box = document.getElementById('prestige-shop-box');
@@ -158,12 +169,14 @@
             const info = PRESTIGE_PERKS[key];
             const cur = getPrestigePerkPoints(key);
             const atMax = cur >= info.max;
-            const canBuy = (p.prestigePoints || 0) > 0 && !atMax;
+            const cost = info.cost || 1;
+            const canBuy = (p.prestigePoints || 0) >= cost && !atMax;
             const val = (cur * info.perPoint);
             const valTxt = (Math.round(val * 100) / 100).toString();
             const suffix = info.flat ? (info.unit || '') : '%';
+            const costTxt = cost > 1 ? ` <small style="color:#888;">(custo: ${cost} pts)</small>` : '';
             html += `<div style="display:flex; flex-wrap:wrap; justify-content:space-between; align-items:center; gap:6px; margin-bottom:6px; background:#3a3a3a; padding:6px 10px; border-radius:4px;">
-                <span title="${info.desc}" style="flex:1 1 180px; min-width:0;">${info.icon} ${info.name}: <b>${cur}/${info.max}</b> <small style="color:#8f8;">(${info.flat ? '+' : '-'}${valTxt}${suffix})</small></span>
+                <span title="${info.desc}" style="flex:1 1 180px; min-width:0;">${info.icon} ${info.name}: <b>${cur}/${info.max}</b> <small style="color:#8f8;">(${info.flat ? '+' : '-'}${valTxt}${suffix})</small>${costTxt}</span>
                 <button onmousedown="startHoldRepeat(() => addPrestigePerk('${key}'))" ontouchstart="event.preventDefault(); startHoldRepeat(() => addPrestigePerk('${key}'))" ${canBuy ? '' : 'disabled'} style="flex-shrink:0; width:28px; height:28px; padding:0; margin-top:0; background:${canBuy ? '#4caf50' : '#666'}; color:white; border:none; cursor:${canBuy ? 'pointer' : 'not-allowed'}; border-radius:50%; font-weight:bold;">+</button>
             </div>`;
         });

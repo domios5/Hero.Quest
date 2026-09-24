@@ -41,15 +41,15 @@
         const box = document.getElementById('bonus-summary-box');
         if (!box) return;
 
-        const dmgPct = Math.round((getTalentDamageMultiplier() * getPericiaDamageMultiplier() * getCompanionDamageMultiplier() - 1) * 100);
+        const dmgPct = Math.round((getTalentDamageMultiplier() * getPericiaDamageMultiplier() * getCompanionDamageMultiplier() * (1 + getUniqueDamagePercent() / 100) * (1 + getRunePercent('dano') / 100) - 1) * 100);
         const defPct = Math.round((1 - getTalentDefenseMultiplier() * getPericiaDefenseMultiplier() * getCompanionDefenseMultiplier()) * 100);
         const critChance = Math.round(getTotalCritChance() * 1000) / 10;
         const critMult = getEffectiveCritMult();
         const dodgeChance = Math.round(getTotalDodgeChance() * 1000) / 10;
-        const goldPct = Math.round((getPrestigeMultiplier() * getTalentGoldMultiplier() * getPericiaGoldMultiplier() * getCompanionGoldMultiplier() - 1) * 100);
-        const xpPct = Math.round((getPrestigeMultiplier() * getTalentXpMultiplier() * getPericiaXpMultiplier() * getCompanionXpMultiplier() - 1) * 100);
+        const goldPct = Math.round((getPrestigeMultiplier() * getTalentGoldMultiplier() * getPericiaGoldMultiplier() * getCompanionGoldMultiplier() * getRuneGoldMultiplier() - 1) * 100);
+        const xpPct = Math.round((getPrestigeMultiplier() * getTalentXpMultiplier() * getPericiaXpMultiplier() * getCompanionXpMultiplier() * getRuneXpMultiplier() - 1) * 100);
         const durationPct = Math.round((1 - getPericiaDurationMultiplier()) * 100);
-        const lootPct = Math.round(getPericiaLootBonus() * 1000) / 10;
+        const lootPct = Math.round((getPericiaLootBonus() + getRuneLootBonus()) * 1000) / 10;
 
         const row = (label, val) => `<div class="stat-row"><span>${label}</span><b>${val}</b></div>`;
 
@@ -129,7 +129,8 @@
                 let bTxt = "";
                 for (let b in item.bonuses) bTxt += `+${item.bonuses[b]}${b.toUpperCase()} `;
                 const uniqueTag = item.unique ? '✨ ' : '';
-                el.innerHTML = `<span style="color:${item.rarityColor}">${uniqueTag}${item.name}</span><br><small>${bTxt}</small>`;
+                const runeIcons = (item.runes || []).map(r => r ? `${RUNES[r.type].icon}+${r.level}` : '').filter(Boolean).join(' ');
+                el.innerHTML = `<span style="color:${item.rarityColor}">${uniqueTag}${item.name}</span><br><small>${bTxt}</small>${runeIcons ? `<br><small style="color:#ffd700;">${runeIcons}</small>` : ''}`;
                 if (slotEl) { slotEl.title = buildItemTooltip(item); slotEl.classList.toggle('unique-item', !!item.unique); }
             } else {
                 el.innerText = "Vazio";
@@ -149,6 +150,12 @@
 
         // Perícias
         renderPericiasBox();
+
+        // Runas: contadores de Pó de Runa e Pedras de Extração
+        const duCount = document.getElementById('rune-dust-count');
+        if (duCount) duCount.innerText = p.runeDust || 0;
+        const esCount = document.getElementById('extraction-stone-count');
+        if (esCount) esCount.innerText = p.extractionStones || 0;
 
         // Prestígio
         document.getElementById('prestige-lvl').innerText = p.prestige;
@@ -198,7 +205,12 @@
             const s = document.createElement('div'); s.className = 'slot';
             const realIdx = order[slotPos];
             const item = realIdx !== undefined ? p.inv[realIdx] : null;
-            if (item) {
+            if (item && item.type === 'rune') {
+                const def = RUNES[item.runeType];
+                s.innerHTML = `<b style="color:#ffd700;">${def.icon} ${def.name}</b><br><small>${item.level > 0 ? `+${item.level} (guardada)` : 'por encaixar'}</small>`;
+                s.title = `${def.name}\nEncaixa numa peça de equipamento (🔮 no separador Herói) para fazer efeito.\nValor: ${Math.round(def.base * 100) / 100}% a ${Math.round(def.max * 100) / 100}% (nível 0 a ${RUNE_MAX_LEVEL}).`;
+                s.onclick = () => showActions(item, realIdx);
+            } else if (item) {
                 let bTxt = "";
                 if (item.bonuses) for (let b in item.bonuses) bTxt += `+${item.bonuses[b]} `;
                 const uniqueTag = item.unique ? '✨ ' : '';
@@ -277,11 +289,21 @@
 
         const potD = document.getElementById('potion-list'); potD.innerHTML = '';
         POTIONS.forEach(pot => {
+            const price = getPotionPrice(pot);
+            const affordable = p.gold >= price;
             const div = document.createElement('div'); div.className = 'item-card';
-            div.innerHTML = `<strong>🧪 ${pot.name}</strong> (${pot.price} Ouro)
-                            <button onclick="buyPotionById('${pot.id}')">Comprar</button>`;
+            div.innerHTML = `<strong>🧪 ${pot.name}</strong> (${price} Ouro)
+                            <button onclick="buyPotionById('${pot.id}')" ${affordable ? '' : 'disabled'}>Comprar</button>`;
             potD.appendChild(div);
         });
+
+        const esBox = document.getElementById('extraction-stone-box');
+        if (esBox) {
+            const esPrice = getExtractionStonePrice();
+            const esAffordable = p.gold >= esPrice;
+            esBox.innerHTML = `<div class="item-card"><strong>💠 Pedra de Extração</strong> (${esPrice} Ouro) — retira uma runa sem a destruir
+                <button onclick="buyExtractionStone()" ${esAffordable ? '' : 'disabled'}>Comprar</button></div>`;
+        }
 
         const sD = document.getElementById('shop-items'); sD.innerHTML = '<h4>Mercado</h4>';
         p.shopItems.forEach((item, i) => {
@@ -322,8 +344,85 @@
         if (overlay) overlay.style.display = 'none';
     }
 
+    // --- Painel de Runas de uma peça de equipamento ---
+    // Mostra cada slot de runa da peça (getRuneSlotCount() no total): se ocupado, o valor atual e
+    // botões Melhorar/Extrair; se vazio, as runas soltas na mochila que dá para encaixar ali.
+    function closeRuneSocketPanel() {
+        const overlay = document.getElementById('rune-socket-overlay');
+        if (overlay) overlay.style.display = 'none';
+    }
+
+    function openRuneSocketPanel(equipSlot) {
+        const item = p.equip[equipSlot];
+        if (!item) { log("Equipa primeiro algo nesse slot.", "var(--btn-red)"); return; }
+        document.getElementById('rune-socket-title').innerHTML = `🔮 Runas de <span style="color:${item.rarityColor || '#fff'}">${item.name}</span>`;
+        renderRuneSocketSlots(equipSlot);
+        document.getElementById('rune-socket-overlay').style.display = 'flex';
+    }
+
+    function renderRuneSocketSlots(equipSlot) {
+        const item = p.equip[equipSlot];
+        const box = document.getElementById('rune-socket-slots');
+        if (!item || !box) return;
+        if (!item.runes) item.runes = [];
+        const slotCount = getRuneSlotCount();
+        const looseRunes = p.inv.map((it, i) => ({ it, i })).filter(x => x.it.type === 'rune');
+        let html = '';
+        for (let i = 0; i < slotCount; i++) {
+            const rune = item.runes[i];
+            if (rune) {
+                const def = RUNES[rune.type];
+                const val = Math.round(getRuneValue(rune.type, rune.level) * 100) / 100;
+                const atMax = rune.level >= RUNE_MAX_LEVEL;
+                const cost = getRuneUpgradeCost(rune.level);
+                html += `<div style="background:#3a3a3a; padding:8px; border-radius:5px; margin-bottom:8px;">
+                    <div>${def.icon} <b>${def.name}</b> +${rune.level} <small style="color:#8f8;">(${val}%)</small></div>
+                    ${atMax ? '<small style="color:var(--gold);">Nível máximo</small>' :
+                        `<button onclick="upgradeRune('${equipSlot}', ${i}); renderRuneSocketSlots('${equipSlot}');" style="margin-top:6px; background:#8e44ad;">Melhorar (${cost.gold} Ouro + ${cost.dust} Pó)</button>`}
+                    <button onclick="extractRune('${equipSlot}', ${i}); renderRuneSocketSlots('${equipSlot}');" style="margin-top:6px; background:#e67e22;">Extrair (1 Pedra)</button>
+                </div>`;
+            } else {
+                html += `<div style="background:#333; padding:8px; border-radius:5px; margin-bottom:8px;">
+                    <small style="color:#aaa;">Slot ${i + 1}: vazio</small>`;
+                if (looseRunes.length === 0) {
+                    html += `<br><small style="color:#888;">Sem runas na mochila para encaixar.</small>`;
+                } else {
+                    looseRunes.forEach(({ it, i: invIdx }) => {
+                        html += `<button onclick="socketRune('${equipSlot}', ${i}, ${invIdx}); renderRuneSocketSlots('${equipSlot}');" style="margin-top:6px; background:#4caf50;">Encaixar ${it.icon} ${it.name}</button>`;
+                    });
+                }
+                html += `</div>`;
+            }
+        }
+        if (slotCount < 2) {
+            html += `<small style="color:#888;">2º slot desbloqueável na Loja de Prestígio (perk "Engaste Duplo").</small>`;
+        }
+        box.innerHTML = html;
+    }
+
     function showActions(item, idx) {
         const overlay = document.getElementById('item-actions-overlay'); overlay.style.display = 'flex';
+        if (item.type === 'rune') {
+            const def = RUNES[item.runeType];
+            document.getElementById('action-info').innerHTML = `<b style="color:#ffd700;">${def.icon} ${def.name}</b>
+                <br><small style="color:#ccc;">${item.level > 0 ? `Guardada em nível +${item.level}.` : 'Ainda por encaixar.'}</small>
+                <br><small style="color:#ccc;">Encaixa-se numa peça de equipamento — usa o 🔮 no separador Herói.</small>`;
+            document.getElementById('btn-equip-use').style.display = 'none';
+            document.getElementById('btn-enchant').style.display = 'none';
+            const sellBtn = document.getElementById('btn-sell');
+            const sellPrice = getSellPrice(item);
+            sellBtn.disabled = false;
+            sellBtn.innerText = `Vender (${sellPrice}G)`;
+            sellBtn.onclick = () => {
+                showConfirm(`Vender ${item.name} por ${sellPrice} Ouro?`, () => {
+                    p.gold += sellPrice; p.inv.splice(idx, 1); closeItemActions(); updateUI();
+                    sfxClick();
+                });
+            };
+            return;
+        }
+        document.getElementById('btn-equip-use').style.display = '';
+        document.getElementById('btn-enchant').style.display = '';
         const uniqueDef = item.unique ? UNIQUE_ITEMS[item.uniqueId] : null;
         const abilityHtml = uniqueDef && uniqueDef.abilityDesc
             ? `<br><small style="color:#ffd700;">⚡ ${uniqueDef.abilityDesc}</small>` : '';
@@ -348,8 +447,11 @@
                     p.buffs.dmgBoostNext = true;
                     log("Elixir de Fúria pronto para o próximo combate!", "var(--accent)");
                 } else {
-                    const amount = item.amount || 50;
-                    p.hp = Math.min(getTotalAttr('vit'), p.hp + amount);
+                    // healPercent (poções novas) é % da vida máxima; amount (saves antigas) continua
+                    // a funcionar como valor fixo, para não invalidar poções já guardadas.
+                    const maxHp = getTotalAttr('vit');
+                    const amount = item.healPercent ? Math.round(maxHp * item.healPercent / 100) : (item.amount || 50);
+                    p.hp = Math.min(maxHp, p.hp + amount);
                     log(`Recuperaste ${amount} HP.`, "var(--accent)");
                 }
                 p.inv.splice(idx, 1); updateUI(); closeItemActions();

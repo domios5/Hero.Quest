@@ -250,6 +250,108 @@
         return { hp: Math.max(0, curHp - dmg), dmg, log: logs.join(', ') };
     }
 
+    // --- Runas ---
+    // Cada peça de equipamento tem um array `runes` (criado à primeira vez que uma é encaixada) de
+    // { type, level }, com no máximo getRuneSlotCount() entradas. O valor de uma runa escala
+    // linearmente de RUNES[type].base (nível 0) a RUNES[type].max (nível RUNE_MAX_LEVEL).
+    function getRuneValue(type, level) {
+        const r = RUNES[type];
+        if (!r) return 0;
+        return r.base + (r.max - r.base) * (level / RUNE_MAX_LEVEL);
+    }
+
+    // Soma o valor de todas as runas de um dado tipo, mas só nos itens atualmente EQUIPADOS —
+    // exatamente como getEquippedUniqueEffects(), para o mesmo comportamento "só conta se vestires".
+    function getRunePercent(type) {
+        let total = 0;
+        Object.values(p.equip).forEach(item => {
+            if (!item || !item.runes) return;
+            item.runes.forEach(r => { if (r && r.type === type) total += getRuneValue(r.type, r.level); });
+        });
+        return total;
+    }
+
+    // Gera um item de Runa solta (por encaixar), com o tipo sorteado entre RUNES — nível sempre 0
+    // ao dropar; só sobe de nível depois de encaixada, com upgradeRune().
+    function createRuneDrop() {
+        const types = Object.keys(RUNES);
+        const type = types[Math.floor(Math.random() * types.length)];
+        const def = RUNES[type];
+        return { id: 'rune_' + type + '_' + Date.now() + '_' + Math.random(), runeType: type, level: 0, type: 'rune', name: def.name, icon: def.icon };
+    }
+
+    function getRuneSocketCost() { return 0; } // encaixar em si é grátis — o custo está em melhorar depois
+
+    // Encaixa a runa na posição p.inv[runeIdx] no slot `slotIdx` da peça de equipamento `equipSlot`
+    // (arma/armadura/etc.). Falha se o slot já estiver ocupado (é preciso extrair primeiro) ou se
+    // slotIdx ultrapassar o número de slots atualmente desbloqueados.
+    function socketRune(equipSlot, slotIdx, runeIdx) {
+        const item = p.equip[equipSlot];
+        const runeItem = p.inv[runeIdx];
+        if (!item || !runeItem || runeItem.type !== 'rune') return;
+        if (slotIdx >= getRuneSlotCount()) { log("Esse slot de runa ainda não está desbloqueado.", "var(--btn-red)"); return; }
+        if (!item.runes) item.runes = [];
+        while (item.runes.length <= slotIdx) item.runes.push(null);
+        if (item.runes[slotIdx]) { log("Esse slot já tem uma runa — extrai-a primeiro.", "var(--btn-red)"); return; }
+        item.runes[slotIdx] = { type: runeItem.runeType, level: 0 };
+        p.inv.splice(runeIdx, 1);
+        log(`${RUNES[item.runes[slotIdx].type].icon} ${RUNES[item.runes[slotIdx].type].name} encaixada em ${item.name}!`, "var(--accent)");
+        sfxClick();
+        updateUI();
+    }
+
+    // Custo de melhorar uma runa do nível atual para o seguinte: ouro e Pó de Runa, ambos a crescer
+    // com o nível (mais caro perto do +10, como seria de esperar do topo da progressão).
+    function getRuneUpgradeCost(level) {
+        return { gold: 30 * (level + 1), dust: level + 1 };
+    }
+
+    function upgradeRune(equipSlot, slotIdx) {
+        const item = p.equip[equipSlot];
+        if (!item || !item.runes || !item.runes[slotIdx]) return;
+        const rune = item.runes[slotIdx];
+        if (rune.level >= RUNE_MAX_LEVEL) { log("Essa runa já está no nível máximo.", "var(--btn-red)"); return; }
+        const cost = getRuneUpgradeCost(rune.level);
+        if (p.gold < cost.gold) { log(`Precisas de ${cost.gold} Ouro para melhorar esta runa.`, "var(--btn-red)"); return; }
+        if ((p.runeDust || 0) < cost.dust) { log(`Precisas de ${cost.dust} Pó de Runa para melhorar esta runa.`, "var(--btn-red)"); return; }
+        p.gold -= cost.gold;
+        p.runeDust -= cost.dust;
+        rune.level++;
+        log(`${RUNES[rune.type].icon} ${RUNES[rune.type].name} melhorada para +${rune.level}!`, "var(--accent)");
+        sfxLoot();
+        updateUI();
+    }
+
+    // Retira a runa do slot `slotIdx` de volta para a mochila, MANTENDO o nível atual — custa 1
+    // Pedra de Extração (comprada na loja), para não seres penalizado por reorganizar equipamento.
+    function extractRune(equipSlot, slotIdx) {
+        const item = p.equip[equipSlot];
+        if (!item || !item.runes || !item.runes[slotIdx]) return;
+        if ((p.extractionStones || 0) <= 0) { log("Precisas de uma Pedra de Extração (compra-a na Loja).", "var(--btn-red)"); return; }
+        if (p.inv.length >= getInvCapacity()) { log("Mochila cheia! Não é possível extrair a runa.", "var(--btn-red)"); return; }
+        const rune = item.runes[slotIdx];
+        const def = RUNES[rune.type];
+        p.extractionStones--;
+        p.inv.push({ id: 'rune_' + rune.type + '_' + Date.now() + '_' + Math.random(), runeType: rune.type, level: rune.level, type: 'rune', name: def.name, icon: def.icon });
+        item.runes[slotIdx] = null;
+        log(`${def.icon} ${def.name} extraída de ${item.name} (nível mantido).`, "var(--accent)");
+        sfxClick();
+        updateUI();
+    }
+
+    function getExtractionStonePrice() {
+        return Math.max(1, Math.floor((EXTRACTION_STONE_BASE_PRICE + p.lvl * EXTRACTION_STONE_PRICE_SCALE) * getPrestigePerkShopDiscount()));
+    }
+    function buyExtractionStone() {
+        const price = getExtractionStonePrice();
+        if (p.gold < price) { log(`Precisas de ${price} Ouro para uma Pedra de Extração.`, "var(--btn-red)"); return; }
+        p.gold -= price;
+        p.extractionStones = (p.extractionStones || 0) + 1;
+        log("Compraste uma Pedra de Extração!", "var(--accent)");
+        sfxClick();
+        updateUI();
+    }
+
     function getEnchantCost(item) {
         if (!item || !item.bonuses) return 0;
         return 50 * Object.keys(item.bonuses).length;
@@ -348,13 +450,22 @@
         if (p.gold >= price) { p.gold -= price; addToInventory(it); p.shopItems.splice(idx, 1); updateUI(); }
     }
 
+    // Preço escala com o nível (basePrice + lvl*priceScale), com o desconto da Perk de Prestígio
+    // "Barganha Eterna" — assim a Poção de Vida continua a compensar tarde no jogo, em vez de ficar
+    // sempre pouco atrás do Elixir Maior em valor absoluto.
+    function getPotionPrice(pot) {
+        return Math.max(1, Math.floor((pot.basePrice + p.lvl * pot.priceScale) * getPrestigePerkShopDiscount()));
+    }
+
     function buyPotionById(id) {
         const pot = POTIONS.find(x => x.id === id);
         if (!pot) return;
         if (p.inv.length >= getInvCapacity()) { log("Mochila cheia! Vende algo antes de comprar.", "var(--btn-red)"); return; }
-        if (p.gold < pot.price) { log("Ouro insuficiente.", "var(--btn-red)"); return; }
-        p.gold -= pot.price;
-        addToInventory({ name: pot.name, type: 'consumable', effect: pot.effect, amount: pot.amount });
+        const price = getPotionPrice(pot);
+        if (p.gold < price) { log("Ouro insuficiente.", "var(--btn-red)"); return; }
+        p.gold -= price;
+        addToInventory({ name: pot.name, type: 'consumable', effect: pot.effect, healPercent: pot.healPercent });
+        sfxClick();
         updateUI();
     }
 
@@ -362,6 +473,7 @@
     // Agora escala com o valor de compra do item (equipamento) ou é um valor fixo pequeno (consumíveis).
     function getSellPrice(item) {
         if (item.type === 'consumable') return 8;
+        if (item.type === 'rune') return 15 + item.level * 10; // runas já melhoradas valem mais
         const base = item.price || 20;
         return Math.max(5, Math.floor(base * 0.4));
     }

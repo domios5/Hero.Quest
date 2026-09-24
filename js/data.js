@@ -41,11 +41,43 @@
         'Mago': { name: 'Surto Arcano', desc: 'Ganha XP instantâneo (5x o teu nível).', cooldown: 60000 }
     };
 
+    // Preços em basePrice + p.lvl * priceScale (getPotionPrice(), em economy.js) — assim a Poção de
+    // Vida continua a compensar mesmo tarde no jogo, em vez de ficar sempre mais cara que o Elixir
+    // Maior por pouco. O efeito "heal" agora cura uma % da vida máxima, não um valor fixo, para não
+    // se tornar insignificante a níveis altos.
     const POTIONS = [
-        { id: 'small', name: 'Poção de Vida', price: 20, effect: 'heal', amount: 50 },
-        { id: 'full', name: 'Elixir Maior', price: 50, effect: 'full_heal' },
-        { id: 'fury', name: 'Elixir de Fúria', price: 40, effect: 'dmg_boost' }
+        { id: 'small', name: 'Poção de Vida', basePrice: 6, priceScale: 1, effect: 'heal', healPercent: 30 },
+        { id: 'full', name: 'Elixir Maior', basePrice: 20, priceScale: 3, effect: 'full_heal' },
+        { id: 'fury', name: 'Elixir de Fúria', basePrice: 15, priceScale: 2, effect: 'dmg_boost' }
     ];
+
+    // --- Runas ---
+    // Podem ser encaixadas em qualquer peça de equipamento (arma, armadura, colar, anel, botas,
+    // capa — incluindo Itens Únicos) e melhoradas de +0 até +10, escalando de "base" a "max"
+    // linearmente (getRuneValue(), em economy.js). Cada peça começa com 1 slot de runa; um 2º slot
+    // desbloqueia-se globalmente na Loja de Prestígio (perk "runa_extra", ~20 Pontos de Prestígio).
+    const RUNE_MAX_LEVEL = 10;
+    const RUNES = {
+        dano: { name: 'Runa de Dano', icon: '🔥', base: 1, max: 5 },
+        vida: { name: 'Runa de Vida', icon: '❤️', base: 2, max: 10 },
+        ouro: { name: 'Runa de Ouro', icon: '💰', base: 2, max: 10 },
+        exp: { name: 'Runa de Experiência', icon: '📘', base: 1, max: 5 },
+        defesa: { name: 'Runa de Defesa', icon: '🛡️', base: 1, max: 5 },
+        esquiva: { name: 'Runa de Esquiva', icon: '💨', base: 1, max: 5 },
+        critico: { name: 'Runa de Crítico', icon: '🎯', base: 1, max: 5 },
+        sorte: { name: 'Runa de Sorte', icon: '🍀', base: 1, max: 5 },
+        vampira: { name: 'Runa Vampírica', icon: '🩸', base: 0.5, max: 2.5 }
+    };
+    // Runas em si (o item por encaixar) só aparecem como drop raro em missões (Aventura) — não à
+    // venda na loja. O "Pó de Runa" (a moeda usada para melhorar uma runa já encaixada) é que dropa
+    // do World Boss e da Arena, dando-lhes mais um motivo para se lutar.
+    const RUNE_DROP_CHANCE_QUEST = 0.04; // ~1 em 25 missões completas
+    const RUNE_DUST_DROP_CHANCE_BOSS = 0.6; const RUNE_DUST_AMOUNT_BOSS = [3, 6];
+    const RUNE_DUST_DROP_CHANCE_ARENA = 0.2; const RUNE_DUST_AMOUNT_ARENA = [1, 2];
+    // Pedra de Extração: consumível vendido na loja a preço alto, remove uma runa encaixada sem a
+    // destruir (mantém o nível) — para poderes reaproveitar o investimento ao trocar de equipamento.
+    const EXTRACTION_STONE_BASE_PRICE = 250;
+    const EXTRACTION_STONE_PRICE_SCALE = 5;
 
     // Configuração de Raridades
     const RARITIES = {

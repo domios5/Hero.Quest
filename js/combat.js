@@ -119,7 +119,7 @@
             log("Golpe Crítico!", "var(--gold)");
         }
         // Itens Únicos: dano % (Cálice de Circe, Selo do Rei Salomão, ...)
-        playerDamage = Math.floor(playerDamage * (1 + getUniqueDamagePercent() / 100));
+        playerDamage = Math.floor(playerDamage * (1 + getUniqueDamagePercent() / 100) * (1 + getRunePercent('dano') / 100));
 
         bossAnimating = true;
         setBossButtonsDisabled(true);
@@ -206,6 +206,12 @@
                 const heal = Math.floor(playerDamage * 0.05);
                 if (heal > 0) { p.hp = Math.min(getTotalAttr('vit'), p.hp + heal); log(`Fúria Implacável drena ${heal} HP do Boss!`, "var(--accent)"); }
             }
+            // Runas: lifesteal da Runa Vampírica (somado ao da Fúria Implacável, se tiveres as duas)
+            const vampPct = getRunePercent('vampira');
+            if (vampPct > 0 && playerDamage > 0 && p.hp > 0) {
+                const heal = Math.floor(playerDamage * vampPct / 100);
+                if (heal > 0) { p.hp = Math.min(getTotalAttr('vit'), p.hp + heal); log(`A Runa Vampírica drena ${heal} HP do Boss!`, "var(--accent)"); }
+            }
 
             // 4b. Se as tentativas chegaram a 0 e o boss continua vivo, começa a contagem para ele fugir
             if (p.boss.attempts <= 0 && p.boss.hp > 0 && !p.boss.depletedAt) {
@@ -220,8 +226,8 @@
                 p.boss.nextSpawn = Date.now() + (BOSS_RESPAWN_TIME * getPrestigePerkBossCooldownMultiplier()); // 3 dias, reduzíveis pela Perk "Caçador Incansável"
 
                 // Recompensas (com multiplicador de Prestígio, Talento, Perícias e Companion)
-                const gEarn = Math.floor(p.lvl * 500 * getPrestigeMultiplier() * getTalentGoldMultiplier() * getPericiaGoldMultiplier() * getCompanionGoldMultiplier());
-                const xEarn = Math.floor(p.lvl * 1000 * getPrestigeMultiplier() * getTalentXpMultiplier() * getPericiaXpMultiplier() * getCompanionXpMultiplier());
+                const gEarn = Math.floor(p.lvl * 500 * getPrestigeMultiplier() * getTalentGoldMultiplier() * getPericiaGoldMultiplier() * getCompanionGoldMultiplier() * getRuneGoldMultiplier());
+                const xEarn = Math.floor(p.lvl * 1000 * getPrestigeMultiplier() * getTalentXpMultiplier() * getPericiaXpMultiplier() * getCompanionXpMultiplier() * getRuneXpMultiplier());
                 p.gold += gEarn; p.xp += xEarn;
                 p.stats.goldEarned += gEarn; p.stats.xpEarned += xEarn;
                 addCompanionXp(xEarn);
@@ -232,7 +238,15 @@
                 const coube = addToInventory(itemMitico);
                 if (coube) p.stats.itemsFound++;
 
-                log("VITÓRIA LENDÁRIA! O Boss caiu e deixou um rasto de ouro" + (coube ? " e um item Mítico!" : "!"), "var(--gold)");
+                // Runas: hipótese de dropar Pó de Runa, usado para melhorar runas já encaixadas
+                let dustTxt = '';
+                if (Math.random() < RUNE_DUST_DROP_CHANCE_BOSS) {
+                    const dust = Math.floor(Math.random() * (RUNE_DUST_AMOUNT_BOSS[1] - RUNE_DUST_AMOUNT_BOSS[0] + 1)) + RUNE_DUST_AMOUNT_BOSS[0];
+                    p.runeDust = (p.runeDust || 0) + dust;
+                    dustTxt = ` e ${dust} Pó de Runa`;
+                }
+
+                log("VITÓRIA LENDÁRIA! O Boss caiu e deixou um rasto de ouro" + (coube ? " e um item Mítico" : "") + dustTxt + "!", "var(--gold)");
                 sfxVictory();
                 checkLvl();
             }
@@ -268,7 +282,7 @@
             log("Golpe Crítico!", "var(--gold)");
         }
         // Itens Únicos: dano % (Cálice de Circe, Selo do Rei Salomão, ...)
-        pDmg = Math.floor(pDmg * (1 + getUniqueDamagePercent() / 100));
+        pDmg = Math.floor(pDmg * (1 + getUniqueDamagePercent() / 100) * (1 + getRunePercent('dano') / 100));
         // Talentos: dano recebido reduzido (Muralha de Aço); Perícias: Fortitude; Companion: Tartaruga Guardiã
         bDmg = Math.max(0, Math.floor(bDmg * getTalentDefenseMultiplier() * getPericiaDefenseMultiplier() * getCompanionDefenseMultiplier()));
         // Talentos: esquiva total ao contra-ataque (Passos Silenciosos), + Perícias: Reflexos
@@ -320,16 +334,28 @@
                     const heal = Math.floor(totalDealt * 0.05);
                     if (heal > 0) { p.hp = Math.min(getTotalAttr('vit'), p.hp + heal); log(`Fúria Implacável drena ${heal} HP do inimigo!`, "var(--accent)"); }
                 }
+                // Runas: lifesteal da Runa Vampírica
+                const vampPctArena = getRunePercent('vampira');
+                if (vampPctArena > 0 && totalDealt > 0 && p.hp > 0) {
+                    const heal = Math.floor(totalDealt * vampPctArena / 100);
+                    if (heal > 0) { p.hp = Math.min(getTotalAttr('vit'), p.hp + heal); log(`A Runa Vampírica drena ${heal} HP do inimigo!`, "var(--accent)"); }
+                }
 
                 if (arenaEnemyState.hp <= 0) {
                     log(`VITÓRIA contra ${enemyName}!`);
-                    const gEarn = Math.floor(p.arenaRank * 100 * getPrestigeMultiplier() * getTalentGoldMultiplier() * getPericiaGoldMultiplier() * getCompanionGoldMultiplier());
-                    const xEarn = Math.floor(p.arenaRank * 50 * getPrestigeMultiplier() * getTalentXpMultiplier() * getPericiaXpMultiplier() * getCompanionXpMultiplier());
+                    const gEarn = Math.floor(p.arenaRank * 100 * getPrestigeMultiplier() * getTalentGoldMultiplier() * getPericiaGoldMultiplier() * getCompanionGoldMultiplier() * getRuneGoldMultiplier());
+                    const xEarn = Math.floor(p.arenaRank * 50 * getPrestigeMultiplier() * getTalentXpMultiplier() * getPericiaXpMultiplier() * getCompanionXpMultiplier() * getRuneXpMultiplier());
                     p.gold += gEarn; p.xp += xEarn;
                     p.stats.goldEarned += gEarn; p.stats.xpEarned += xEarn;
                     addCompanionXp(xEarn);
                     p.stats.arenaWins++;
                     p.arenaRank++; checkLvl();
+                    // Runas: hipótese de dropar Pó de Runa
+                    if (Math.random() < RUNE_DUST_DROP_CHANCE_ARENA) {
+                        const dust = Math.floor(Math.random() * (RUNE_DUST_AMOUNT_ARENA[1] - RUNE_DUST_AMOUNT_ARENA[0] + 1)) + RUNE_DUST_AMOUNT_ARENA[0];
+                        p.runeDust = (p.runeDust || 0) + dust;
+                        log(`+${dust} Pó de Runa!`, "var(--accent)");
+                    }
                     sfxVictory();
                 } else {
                     p.hp = 1; flashDamage(); log(`DERROTA contra ${enemyName}!`); sfxDefeat();
