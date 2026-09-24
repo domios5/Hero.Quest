@@ -132,7 +132,14 @@
         <div class="card" style="text-align: center;">
             <h3>Arena Rank <span id="arena-rank">1</span></h3>
             <p>Dano Total: <span id="player-dmg-val" class="highlight">0</span></p>
-            <button onclick="fightArena()" style="background: var(--btn-red);">Lutar</button>
+            <button id="btn-fight-arena" onclick="fightArena()" style="background: var(--btn-red);">Lutar</button>
+        </div>
+        <div id="arena-enemy-area" style="margin-top: 15px; border: 2px solid var(--btn-red); padding: 10px; border-radius: 5px; display: none; text-align: center;">
+            <h4 style="margin: 0 0 8px 0;">⚔️ <span id="arena-enemy-name">Inimigo</span></h4>
+            <div style="background: #444; width: 100%; height: 16px; border-radius: 10px; overflow: hidden;">
+                <div id="arena-enemy-hp-bar" style="background: #ff4444; height: 100%; width: 100%; transition: width 0.3s;"></div>
+            </div>
+            <p style="margin: 6px 0 0 0; font-size: 0.85em;">HP: <span id="arena-enemy-hp-val">0</span> / <span id="arena-enemy-hp-max">0</span></p>
         </div>
         <div id="boss-area" style="margin-top: 20px; border: 2px solid var(--gold); padding: 10px; display: none;">
             <h3 style="color: var(--gold);">WORLD BOSS</h3>

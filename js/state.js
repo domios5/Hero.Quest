@@ -44,6 +44,8 @@
 
     let invSortMode = 'none'; // não é guardado, reinicia a cada carregamento
     let sellRarityFilter = new Set(); // raridades marcadas para venda em lote; também não é guardado
+    let arenaEnemyState = null; // { name, hp, maxHp } do inimigo da Arena durante/depois de um combate animado; transitório, não é guardado
+    let combatAnimating = false; // true enquanto uma animação de combate (Arena ou Boss) está a decorrer
 
     // --- Personagens (cada um é gravado numa chave própria do localStorage) ---
     function charStorageKey(id) { return 'heroQuestChar_' + id; }

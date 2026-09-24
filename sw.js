@@ -1,4 +1,4 @@
-const CACHE_NAME = 'hero-quest-v23';
+const CACHE_NAME = 'hero-quest-v24';
 const CACHE_FILES = [
   'index.html',
   'manifest.json',

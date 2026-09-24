@@ -9,6 +9,31 @@
         box.classList.add('flash-dmg');
     }
 
+    // Atualização "leve" das barras de vida durante uma animação de combate (Arena/Boss): só toca
+    // no que muda turno a turno, sem re-renderizar a mochila/conquistas/etc. nem gravar o save —
+    // isso só acontece uma vez, no updateUI() completo chamado no fim do combate.
+    function updateCombatBars() {
+        const maxHpVal = getTotalAttr('vit') || 1;
+        const hpShown = Math.max(0, p.hp);
+        document.getElementById('hp-cur').innerText = Math.floor(hpShown);
+        const pct = Math.max(0, Math.min(100, (hpShown / maxHpVal) * 100));
+        const hpBar = document.getElementById('hp-bar-inner');
+        hpBar.style.width = pct + '%';
+        hpBar.style.background = pct > 50 ? '#4caf50' : (pct > 20 ? '#e6b800' : '#c0392b');
+
+        if (p.boss.active) {
+            document.getElementById('boss-hp-val').innerText = Math.max(0, p.boss.hp);
+            document.getElementById('boss-hp-max').innerText = p.boss.maxHp;
+            document.getElementById('boss-hp-bar').style.width = Math.max(0, (p.boss.hp / p.boss.maxHp) * 100) + '%';
+        }
+        if (arenaEnemyState) {
+            document.getElementById('arena-enemy-name').innerText = arenaEnemyState.name;
+            document.getElementById('arena-enemy-hp-val').innerText = Math.max(0, arenaEnemyState.hp);
+            document.getElementById('arena-enemy-hp-max').innerText = arenaEnemyState.maxHp;
+            document.getElementById('arena-enemy-hp-bar').style.width = Math.max(0, (arenaEnemyState.hp / arenaEnemyState.maxHp) * 100) + '%';
+        }
+    }
+
     // Resumo agregado de todos os bónus atuais (Talento + Perícias + Companion + Prestígio), para
     // o jogador não ter de somar tudo de cabeça. Usa exatamente as mesmas funções multiplicadoras
     // já aplicadas no combate/economia, só que aqui só para apresentação.
