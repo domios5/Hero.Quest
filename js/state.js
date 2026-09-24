@@ -18,7 +18,8 @@
                 nextSpawn: 0, // Timestamp para daqui a 3 dias
                 active: false,
                 depletedAt: 0, // Timestamp de quando as tentativas chegaram a 0, para o boss fugir depois de 1h
-                shieldHitsUsed: 0 // quantos ataques já foram absorvidos pelo Escudo Arcano nesta aparição
+                shieldHitsUsed: 0, // quantos ataques já foram absorvidos pelo Escudo Arcano nesta aparição
+                dots: [] // queimadura/veneno de Itens Únicos ativos nesta aparição — ver applyUniqueDots/tickUniqueDots
             },
             ability: { lastUsed: 0 },
             prestige: 0,
@@ -88,6 +89,7 @@
         if (p.boss.dmg === undefined) p.boss.dmg = p.lvl * 15;
         if (p.boss.depletedAt === undefined) p.boss.depletedAt = 0;
         if (p.boss.shieldHitsUsed === undefined) p.boss.shieldHitsUsed = 0;
+        if (!p.boss.dots) p.boss.dots = [];
         if (!p.ability) p.ability = { lastUsed: 0 };
         if (p.prestige === undefined) p.prestige = 0;
         if (p.prestigePoints === undefined) p.prestigePoints = 0;
@@ -292,8 +294,14 @@
             }
         });
 
+        // Bónus percentuais de Itens Únicos equipados (statPercent aplica-se ao atributo específico;
+        // hpPercent é o equivalente para vit, e soma-se ao mesmo percentual antes de arredondar).
+        let uniquePercent = getUniqueStatPercent(type) + (type === 'vit' ? getUniqueHpPercent() : 0);
+
         if (type === 'vit') {
-            base = Math.round(base * (1 + getPericiaPercent('vitalidade_extra') / 100));
+            base = Math.round(base * (1 + getPericiaPercent('vitalidade_extra') / 100) * (1 + uniquePercent / 100));
+        } else if (uniquePercent) {
+            base = Math.round(base * (1 + uniquePercent / 100));
         }
 
         return base;

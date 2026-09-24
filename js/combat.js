@@ -55,6 +55,7 @@
             p.boss.active = true;
             p.boss.depletedAt = 0;
             p.boss.shieldHitsUsed = 0; // reinicia o Escudo Arcano (Mago) para esta nova aparição
+            p.boss.dots = []; // reinicia queimadura/veneno de Itens Únicos para esta nova aparição
             log("UM BOSS MÍTICO APARECEU!", "var(--gold)");
         }
     }
@@ -117,15 +118,33 @@
             playerDamage = Math.floor(playerDamage * getEffectiveCritMult());
             log("Golpe Crítico!", "var(--gold)");
         }
+        // Itens Únicos: dano % (Cálice de Circe, Selo do Rei Salomão, ...)
+        playerDamage = Math.floor(playerDamage * (1 + getUniqueDamagePercent() / 100));
 
         bossAnimating = true;
         setBossButtonsDisabled(true);
+
+        // --- Queimadura/Veneno de Itens Únicos ativos desde ataques anteriores ---
+        if (p.boss.dots && p.boss.dots.length) {
+            const dot = tickUniqueDots(p.boss.dots, p.boss.hp, p.boss.maxHp);
+            p.boss.hp = dot.hp;
+            if (dot.log) log(dot.log, "var(--btn-red)");
+        }
+
+        // --- Escudo Místico do Boss: hipótese de bloquear metade do teu dano, a não ser que uses
+        // uma arma de assinatura que o ignora (Excalibur, Cajado de Odin, Adaga de Brutus). ---
+        if (p.boss.hp > 0 && !hasUniqueIgnoreBossShield() && Math.random() < BOSS_SHIELD_CHANCE) {
+            playerDamage = Math.floor(playerDamage * (1 - BOSS_SHIELD_BLOCK));
+            log("O Escudo Místico do Boss bloqueou parte do teu ataque!", "var(--btn-red)");
+        }
 
         // --- 1º tempo: o teu ataque ---
         p.boss.hp -= playerDamage;
         p.boss.attempts--;
         flashDamage();
         log(`Ataque feroz! Causaste ${playerDamage} de dano.`, "var(--accent)");
+        // Itens Únicos: aplica/renova queimadura ou veneno no Boss, se estiver equipado algum
+        if (p.boss.hp > 0) applyUniqueDots(p.boss.dots);
         updateCombatBars();
 
         setTimeout(() => {
@@ -166,6 +185,14 @@
                 if (shieldBlocked) log("O Escudo Arcano absorveu o contra-ataque do Boss!", "var(--accent)");
                 else if (dodged) log("Esquivaste-te do contra-ataque do Boss!", "var(--accent)");
                 else log(`O Boss contra-atacou! Perdeste ${bossDamage} de HP.`, "var(--btn-red)");
+
+                // Itens Únicos: reflete parte do dano recebido de volta para o Boss (Grevas de Marte)
+                const reflectPct = getUniqueReflectPercent();
+                if (reflectPct > 0 && bossDamage > 0 && p.boss.hp > 0) {
+                    const reflectDmg = Math.max(1, Math.round(bossDamage * reflectPct / 100));
+                    p.boss.hp -= reflectDmg;
+                    log(`As Grevas de Marte devolveram ${reflectDmg} de dano ao Boss!`, "var(--accent)");
+                }
 
                 // 4. Verificação de Morte do Jogador
                 if (p.hp <= 0) {
@@ -240,6 +267,8 @@
             pDmg = Math.floor(pDmg * getEffectiveCritMult());
             log("Golpe Crítico!", "var(--gold)");
         }
+        // Itens Únicos: dano % (Cálice de Circe, Selo do Rei Salomão, ...)
+        pDmg = Math.floor(pDmg * (1 + getUniqueDamagePercent() / 100));
         // Talentos: dano recebido reduzido (Muralha de Aço); Perícias: Fortitude; Companion: Tartaruga Guardiã
         bDmg = Math.max(0, Math.floor(bDmg * getTalentDefenseMultiplier() * getPericiaDefenseMultiplier() * getCompanionDefenseMultiplier()));
         // Talentos: esquiva total ao contra-ataque (Passos Silenciosos), + Perícias: Reflexos
@@ -260,11 +289,28 @@
         log(`A enfrentar ${enemyName} (Rank ${p.arenaRank})...`);
 
         let totalDealt = 0;
+        let arenaDots = []; // queimadura/veneno de Itens Únicos, só para esta luta (não persiste)
         runBattleTurns(
             (turn) => {
+                // Queimadura/Veneno de turnos anteriores desta luta
+                if (arenaDots.length) {
+                    const dot = tickUniqueDots(arenaDots, arenaEnemyState.hp, bMaxHp);
+                    arenaEnemyState.hp = dot.hp; totalDealt += dot.dmg;
+                    if (dot.log) log(dot.log, "var(--btn-red)");
+                    if (arenaEnemyState.hp <= 0) { arenaEnemyState.hp = 0; return false; }
+                }
                 arenaEnemyState.hp -= pDmg; totalDealt += pDmg;
                 if (arenaEnemyState.hp <= 0) { arenaEnemyState.hp = 0; return false; } // inimigo morreu, não chega a contra-atacar
-                p.hp -= bDmg;
+                applyUniqueDots(arenaDots); // renova queimadura/veneno se tiveres o item equipado
+                if (bDmg > 0) {
+                    p.hp -= bDmg;
+                    const reflectPct = getUniqueReflectPercent();
+                    if (reflectPct > 0) {
+                        const reflectDmg = Math.max(1, Math.round(bDmg * reflectPct / 100));
+                        arenaEnemyState.hp -= reflectDmg; totalDealt += reflectDmg;
+                        if (arenaEnemyState.hp <= 0) { arenaEnemyState.hp = 0; return false; } // reflexo matou o inimigo
+                    }
+                }
                 if (p.hp <= 0) { p.hp = 0; return false; } // ficaste sem HP, combate acaba aqui
                 return true;
             },

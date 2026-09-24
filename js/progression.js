@@ -8,7 +8,7 @@
     function getDexDodgeChance() { return Math.min(20, getTotalAttr('dex') * 0.25) / 100; }
 
     function getTotalCritChance() {
-        return 1 - (1 - getTalentCritChance()) * (1 - getLuckCritChance());
+        return 1 - (1 - getTalentCritChance()) * (1 - getLuckCritChance()) * (1 - getUniqueCritPercent() / 100);
     }
     // Multiplicador do crítico: se tiveres o talento Golpe Crítico mantém a escala atual (x2/x2.5
     // especializado); se o crítico só vier da Sorte, é um x1.5 mais modesto.
@@ -78,7 +78,8 @@
     function getPericiaDamageMultiplier() { return 1 + getPericiaPercent('poder_ofensivo') / 100; }
     // Multiplica o dano RECEBIDO. Fortitude não tem limite de pontos, por isso o multiplicador é
     // sempre travado a um mínimo de 5% do dano original — nunca fica a 0% (invencível) ou negativo.
-    function getPericiaDefenseMultiplier() { return Math.max(0.05, 1 - getPericiaPercent('fortitude') / 100); }
+    // Inclui também a defesa % dos Itens Únicos equipados (Placas do Titã, Pedra Filosofal, ...).
+    function getPericiaDefenseMultiplier() { return Math.max(0.05, 1 - getPericiaPercent('fortitude') / 100 - getUniqueDefensePercent() / 100); }
     // Vai até 100 pontos (100%), o que torna as missões instantâneas; o Math.max é só uma rede de
     // segurança para nunca passar a duração para negativo.
     function getPericiaDurationMultiplier() { return Math.max(0, 1 - getPericiaPercent('regeneracao_rapida') / 100); }
@@ -90,7 +91,7 @@
     // Combina a esquiva de Talentos (Passos Silenciosos) com a de Perícias (Reflexos) como duas
     // hipóteses independentes: P(esquiva) = 1 - (1-A)*(1-B)
     function getTotalDodgeChance() {
-        return 1 - (1 - getTalentDodgeChance()) * (1 - getPericiaDodgeBonus()) * (1 - getDexDodgeChance());
+        return 1 - (1 - getTalentDodgeChance()) * (1 - getPericiaDodgeBonus()) * (1 - getDexDodgeChance()) * (1 - getUniqueDodgePercent() / 100);
     }
 
     function renderPericiasBox() {

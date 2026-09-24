@@ -260,11 +260,14 @@
         const uniqL = document.getElementById('unique-items-list'); uniqL.innerHTML = '';
         Object.keys(UNIQUE_ITEMS).forEach(uid => {
             const def = UNIQUE_ITEMS[uid];
+            if (def.classReq && def.classReq !== p.class && !p.uniqueItems[uid]) return; // esconde exclusivos de outra classe ainda não obtidos
             const done = !!p.uniqueItems[uid];
             const div = document.createElement('div');
             div.className = 'unique-card' + (done ? ' done' : '');
-            div.innerHTML = `<div class="unique-title">${done ? '✓ ' : '🔒 '}${def.icon} ${def.name}</div>
+            const classTag = def.classReq ? ` <small style="color:#888;">(${def.classReq})</small>` : '';
+            div.innerHTML = `<div class="unique-title">${done ? '✓ ' : '🔒 '}${def.icon} ${def.name}${classTag}</div>
                 <small>${slotLabels[def.slot]} — requer: ${def.condDesc}</small>
+                ${def.abilityDesc ? `<br><small style="color:#ffd700;">⚡ ${def.abilityDesc}</small>` : ''}
                 ${done ? `<br><small style="color:#ccc; font-style:italic;">"${def.lore}"</small>` : ''}`;
             uniqL.appendChild(div);
         });
@@ -321,14 +324,21 @@
 
     function showActions(item, idx) {
         const overlay = document.getElementById('item-actions-overlay'); overlay.style.display = 'flex';
+        const uniqueDef = item.unique ? UNIQUE_ITEMS[item.uniqueId] : null;
+        const abilityHtml = uniqueDef && uniqueDef.abilityDesc
+            ? `<br><small style="color:#ffd700;">⚡ ${uniqueDef.abilityDesc}</small>` : '';
         document.getElementById('action-info').innerHTML = item.unique
-            ? `<b style="color:${item.rarityColor};">✨ ${item.name}</b><br><small style="color:#ccc; font-style:italic;">"${item.lore}"</small>`
+            ? `<b style="color:${item.rarityColor};">✨ ${item.name}</b><br><small style="color:#ccc; font-style:italic;">"${item.lore}"</small>${abilityHtml}`
             : `<b>${item.name}</b>`;
         const btn = document.getElementById('btn-equip-use');
         const enchantBtn = document.getElementById('btn-enchant');
+        // Itens Únicos exclusivos de outra classe nunca podem ser equipados (podem acontecer de
+        // teres desbloqueado antes de existir esta restrição, ou por edição manual da save).
+        const classLocked = uniqueDef && uniqueDef.classReq && uniqueDef.classReq !== p.class;
 
         if (item.type === 'consumable') {
             enchantBtn.style.display = 'none';
+            btn.disabled = false;
             btn.innerText = "Usar";
             btn.onclick = () => {
                 if (item.effect === 'full_heal') {
@@ -344,7 +354,13 @@
                 }
                 p.inv.splice(idx, 1); updateUI(); closeItemActions();
             };
+        } else if (classLocked) {
+            btn.innerText = `Exclusivo de ${uniqueDef.classReq}`;
+            btn.disabled = true;
+            btn.onclick = null;
+            enchantBtn.style.display = 'none';
         } else {
+            btn.disabled = false;
             btn.innerText = "Equipar"; btn.onclick = () => {
                 const t = item.type; if (p.equip[t]) p.inv.push(p.equip[t]);
                 p.equip[t] = item; p.inv.splice(idx, 1); updateUI(); closeItemActions();

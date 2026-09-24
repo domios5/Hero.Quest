@@ -170,6 +170,7 @@
         Object.keys(UNIQUE_ITEMS).forEach(uid => {
             if (p.uniqueItems[uid]) return;
             const def = UNIQUE_ITEMS[uid];
+            if (def.classReq && def.classReq !== p.class) return; // exclusivo de outra classe
             if (!def.cond()) return;
             p.uniqueItems[uid] = true;
             const item = createUniqueItem(uid);
@@ -178,6 +179,75 @@
             sfxLevelUp();
             showNotice(`✨ ${def.icon} ${def.name}`, `${def.lore}\n\nEncontras este item na tua mochila.`);
         });
+    }
+
+    // --- Motor de Efeitos dos Itens Únicos ---
+    // Agrega os "effects" (ver data.js) de todos os Itens Únicos atualmente EQUIPADOS. Chamado a
+    // cada cálculo relevante (stats, esquiva, crítico, dano, defesa) — é barato (no máx. 6 slots),
+    // por isso não guarda cache.
+    function getEquippedUniqueEffects() {
+        let list = [];
+        Object.values(p.equip).forEach(item => {
+            if (!item || !item.unique || !item.uniqueId) return;
+            const def = UNIQUE_ITEMS[item.uniqueId];
+            if (def && def.effects) list = list.concat(def.effects);
+        });
+        return list;
+    }
+    function getUniqueStatPercent(stat) {
+        return getEquippedUniqueEffects()
+            .filter(e => e.type === 'statPercent' && e.stat === stat)
+            .reduce((sum, e) => sum + e.percent, 0);
+    }
+    function getUniqueHpPercent() {
+        return getEquippedUniqueEffects().filter(e => e.type === 'hpPercent').reduce((sum, e) => sum + e.percent, 0);
+    }
+    function getUniqueDefensePercent() {
+        return getEquippedUniqueEffects().filter(e => e.type === 'defensePercent').reduce((sum, e) => sum + e.percent, 0);
+    }
+    function getUniqueDodgePercent() {
+        return getEquippedUniqueEffects().filter(e => e.type === 'dodgePercent').reduce((sum, e) => sum + e.percent, 0);
+    }
+    function getUniqueCritPercent() {
+        return getEquippedUniqueEffects().filter(e => e.type === 'critPercent').reduce((sum, e) => sum + e.percent, 0);
+    }
+    function getUniqueDamagePercent() {
+        return getEquippedUniqueEffects().filter(e => e.type === 'damagePercent').reduce((sum, e) => sum + e.percent, 0);
+    }
+    function getUniqueReflectPercent() {
+        return getEquippedUniqueEffects().filter(e => e.type === 'reflectPercent').reduce((sum, e) => sum + e.percent, 0);
+    }
+    function hasUniqueIgnoreBossShield() {
+        return getEquippedUniqueEffects().some(e => e.type === 'ignoreBossShield');
+    }
+    function getUniqueDots() {
+        return getEquippedUniqueEffects().filter(e => e.type === 'dot');
+    }
+
+    // Aplica/renova os DoTs (queimadura/veneno) ativos nos itens equipados a um alvo. `dotsArr` é o
+    // array persistente onde os efeitos vivem: p.boss.dots para o World Boss (sobrevive entre
+    // cliques), ou um array local de uma só luta para a Arena.
+    function applyUniqueDots(dotsArr) {
+        getUniqueDots().forEach(eff => {
+            const existing = dotsArr.find(d => d.key === eff.key);
+            if (existing) { existing.turnsLeft = eff.turns; }
+            else { dotsArr.push({ key: eff.key, name: eff.name, percent: eff.percent, turnsLeft: eff.turns }); }
+        });
+    }
+    // Processa um turno de DoTs sobre um alvo com vida atual `curHp` e vida máxima `maxHp`; devolve
+    // { hp, dmg, log } — hp já reduzido, dmg total causado nesse turno, e uma linha de log (ou '').
+    function tickUniqueDots(dotsArr, curHp, maxHp) {
+        let dmg = 0;
+        let logs = [];
+        for (let i = dotsArr.length - 1; i >= 0; i--) {
+            const d = dotsArr[i];
+            const tickDmg = Math.max(1, Math.round(maxHp * d.percent / 100));
+            dmg += tickDmg;
+            logs.push(`${d.name}: -${tickDmg}`);
+            d.turnsLeft--;
+            if (d.turnsLeft <= 0) dotsArr.splice(i, 1);
+        }
+        return { hp: Math.max(0, curHp - dmg), dmg, log: logs.join(', ') };
     }
 
     function getEnchantCost(item) {
@@ -319,6 +389,8 @@
             for (let b in item.bonuses) lines.push(`+${item.bonuses[b]} ${attrNames[b] || b}`);
         }
         if (item.unique) {
+            const def = UNIQUE_ITEMS[item.uniqueId];
+            if (def && def.abilityDesc) lines.push(`⚡ ${def.abilityDesc}`);
             lines.push('');
             lines.push(`"${item.lore}"`);
             lines.push('Item Único — não pode ser vendido.');
