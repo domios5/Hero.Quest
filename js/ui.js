@@ -67,6 +67,9 @@
 
     function updateUI() {
         document.getElementById('display-class').innerText = p.class || "...";
+        const headerImg = document.getElementById('header-class-img');
+        const classImgSrc = CLASS_IMAGES[p.class];
+        if (headerImg) { if (classImgSrc) { headerImg.src = classImgSrc; headerImg.style.display = 'inline-block'; } else { headerImg.style.display = 'none'; } }
         const charInfo = activeCharId ? (getCharList().find(c => c.id === activeCharId) || null) : null;
         document.getElementById('display-char-name').innerText = charInfo ? charInfo.name : '';
         document.getElementById('lvl').innerText = p.lvl;
@@ -277,7 +280,10 @@
             const div = document.createElement('div');
             div.className = 'unique-card' + (done ? ' done' : '');
             const classTag = def.classReq ? ` <small style="color:#888;">(${def.classReq})</small>` : '';
+            const imgSrc = UNIQUE_ITEM_IMAGES[uid];
+            const imgHtml = imgSrc ? `<img src="${imgSrc}" alt="${def.name}" style="max-width:90px; max-height:90px; display:block; margin:4px 0; border-radius:6px; ${done ? '' : 'filter:grayscale(1) brightness(0.5);'}" onerror="this.remove()">` : '';
             div.innerHTML = `<div class="unique-title">${done ? '✓ ' : '🔒 '}${def.icon} ${def.name}${classTag}</div>
+                ${imgHtml}
                 <small>${slotLabels[def.slot]} — requer: ${def.condDesc}</small>
                 ${def.abilityDesc ? `<br><small style="color:#ffd700;">⚡ ${def.abilityDesc}</small>` : ''}
                 ${done ? `<br><small style="color:#ccc; font-style:italic;">"${def.lore}"</small>` : ''}`;
@@ -426,8 +432,10 @@
         const uniqueDef = item.unique ? UNIQUE_ITEMS[item.uniqueId] : null;
         const abilityHtml = uniqueDef && uniqueDef.abilityDesc
             ? `<br><small style="color:#ffd700;">⚡ ${uniqueDef.abilityDesc}</small>` : '';
+        const uniqueImgSrc = item.unique ? UNIQUE_ITEM_IMAGES[item.uniqueId] : null;
+        const uniqueImgHtml = uniqueImgSrc ? `<img src="${uniqueImgSrc}" alt="${item.name}" style="max-width:140px; max-height:140px; display:block; margin:0 auto 8px auto; border-radius:6px;" onerror="this.remove()">` : '';
         document.getElementById('action-info').innerHTML = item.unique
-            ? `<b style="color:${item.rarityColor};">✨ ${item.name}</b><br><small style="color:#ccc; font-style:italic;">"${item.lore}"</small>${abilityHtml}`
+            ? `${uniqueImgHtml}<b style="color:${item.rarityColor};">✨ ${item.name}</b><br><small style="color:#ccc; font-style:italic;">"${item.lore}"</small>${abilityHtml}`
             : `<b>${item.name}</b>`;
         const btn = document.getElementById('btn-equip-use');
         const enchantBtn = document.getElementById('btn-enchant');

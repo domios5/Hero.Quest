@@ -300,6 +300,10 @@
         setArenaButtonDisabled(true);
         arenaEnemyState = { name: enemyName, hp: bMaxHp, maxHp: bMaxHp };
         document.getElementById('arena-enemy-area').style.display = 'block';
+        const enemyImgEl = document.getElementById('arena-enemy-img');
+        const enemyImgSrc = ARENA_ENEMY_IMAGES[enemyName];
+        if (enemyImgSrc) { enemyImgEl.src = enemyImgSrc; enemyImgEl.style.display = 'inline-block'; }
+        else { enemyImgEl.style.display = 'none'; }
         log(`A enfrentar ${enemyName} (Rank ${p.arenaRank})...`);
 
         let totalDealt = 0;

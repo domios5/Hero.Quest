@@ -35,6 +35,47 @@
 
     const ARENA_ENEMIES = ["Goblin Feroz", "Orc Selvagem", "Lobo das Sombras", "Esqueleto Guerreiro", "Troll da Montanha", "Bandido Mascarado", "Aranha Gigante", "Golem de Pedra"];
 
+    // --- Imagens ---
+    // Uma imagem por classe, por inimigo da Arena e para o World Boss (pasta img/). Sempre que uma
+    // nova imagem for desenhada, basta adicioná-la aqui — getEnemyImage()/getClassImage() (em
+    // ui.js) mostram-na se existir e não mostram nada (sem quebrar) se ainda não existir.
+    const CLASS_IMAGES = {
+        Guerreiro: 'img/guerreiro.jpg',
+        Assassino: 'img/assassino.jpg',
+        Mago: 'img/mago.jpg'
+    };
+    const WORLD_BOSS_IMAGE = 'img/world-boss.jpg';
+    const ARENA_ENEMY_IMAGES = {
+        'Goblin Feroz': 'img/goblin-feroz.jpg',
+        'Orc Selvagem': 'img/orc-selvagem.jpg',
+        'Lobo das Sombras': 'img/lobo-das-sombras.jpg',
+        'Esqueleto Guerreiro': 'img/esqueleto-guerreiro.jpg',
+        'Troll da Montanha': 'img/troll-da-montanha.jpg',
+        'Bandido Mascarado': 'img/bandido-mascarado.jpg',
+        'Aranha Gigante': 'img/aranha-gigante.jpg',
+        'Golem de Pedra': 'img/golem-de-pedra.jpg'
+    };
+    // Imagem de cada Item Único, indexada pela chave em UNIQUE_ITEMS (ex: 'excalibur'). Só é
+    // preciso adicionar aqui os que já têm arte — os que faltam simplesmente não mostram imagem.
+    const UNIQUE_ITEM_IMAGES = {
+        excalibur: 'img/excalibur.jpg',
+        cajado_odin: 'img/cajado_odin.jpg',
+        adaga_brutus: 'img/adaga_brutus.jpg',
+        placas_titan: 'img/placas_titan.jpg',
+        manto_avalon: 'img/manto_avalon.jpg',
+        manto_vazio: 'img/manto_vazio.jpg',
+        grevas_marte: 'img/grevas_marte.jpg',
+        botas_cinza_fenica: 'img/botas_cinza_fenica.jpg',
+        botas_hermes: 'img/botas_hermes.jpg',
+        amuleto_eternidade: 'img/amuleto_eternidade.jpg',
+        anel_engano: 'img/anel_engano.jpg',
+        selo_salomao: 'img/selo_salomao.jpg',
+        anel_borgia: 'img/anel_borgia.jpg',
+        capa_sombras: 'img/capa_sombras.jpg',
+        veu_morgana: 'img/veu_morgana.jpg',
+        estandarte_dragao: 'img/estandarte_dragao.jpg'
+    };
+
     const ABILITIES = {
         'Guerreiro': { name: 'Fúria de Batalha', desc: 'Cura instantaneamente 50% do teu HP máximo.', cooldown: 60000 },
         'Assassino': { name: 'Golpe Certeiro', desc: 'Ganha ouro instantâneo (5x o teu nível).', cooldown: 60000 },
