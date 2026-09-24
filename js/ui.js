@@ -163,6 +163,9 @@
             </div>`;
         }
 
+        // Vender por raridade (venda em lote)
+        renderSellRarityBox();
+
         // Inventário (com ordenação de exibição)
         const invL = document.getElementById('inventory-list'); invL.innerHTML = '';
         const order = getSortedInventoryIndices();
@@ -264,6 +267,25 @@
             sD.appendChild(div);
         });
         save();
+    }
+
+    // Caixa de venda em lote por raridade, na Mochila: uma checkbox por raridade (o estado
+    // marcado/desmarcado vive em sellRarityFilter, que sobrevive a re-renders mas não é guardado).
+    function renderSellRarityBox() {
+        const box = document.getElementById('sell-rarity-box');
+        if (!box) return;
+        const chips = Object.keys(RARITIES).map(key => {
+            const r = RARITIES[key];
+            const checked = sellRarityFilter.has(r.name);
+            return `<label style="display:flex; align-items:center; gap:4px; font-size:0.75em; background:#3a3a3a; padding:4px 8px; border-radius:4px; cursor:pointer; border:1px solid ${checked ? r.color : '#555'};">
+                <input type="checkbox" onchange="toggleSellRarityFilter('${r.name}', this.checked)" ${checked ? 'checked' : ''} style="margin:0; width:auto;">
+                <span style="color:${r.color};">${r.name}</span>
+            </label>`;
+        }).join('');
+        const { count, gold } = getSellByRarityPreview();
+        box.innerHTML = `<p style="font-size:0.8em; color:#aaa; margin:0 0 6px 0;">Vender por raridade:</p>
+            <div style="display:flex; flex-wrap:wrap; gap:6px; margin-bottom:8px;">${chips}</div>
+            <button onclick="sellByRarity()" ${count > 0 ? '' : 'disabled'} style="background:${count > 0 ? '#e67e22' : '#666'};">${count > 0 ? `Vender ${count} item(ns) por ${gold} Ouro` : 'Seleciona uma raridade com itens'}</button>`;
     }
 
     // Fecha o modal de ações do item (Equipar/Usar, Encantar, Vender), aberto por showActions().

@@ -43,6 +43,7 @@
     let activeCharId = null; // id do personagem atualmente carregado (chave usada no localStorage)
 
     let invSortMode = 'none'; // não é guardado, reinicia a cada carregamento
+    let sellRarityFilter = new Set(); // raridades marcadas para venda em lote; também não é guardado
 
     // --- Personagens (cada um é gravado numa chave própria do localStorage) ---
     function charStorageKey(id) { return 'heroQuestChar_' + id; }

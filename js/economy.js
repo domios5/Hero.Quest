@@ -227,13 +227,16 @@
             for (let i = 0; i < times; i++) {
                 const keys = Object.keys(item.bonuses);
                 const k = keys[Math.floor(Math.random() * keys.length)];
-                const boost = Math.floor(Math.random() * 3) + 1;
+                let boost = Math.floor(Math.random() * 3) + 1;
+                // Itens Únicos ganham 50% a mais por encantamento — mantém-se sempre à frente de
+                // Míticos encontrados mais tarde (a níveis mais altos), em vez de ficarem ultrapassados.
+                if (item.unique) boost = Math.ceil(boost * 1.5);
                 item.bonuses[k] += boost;
                 gained[k] = (gained[k] || 0) + boost;
             }
             p.stats.enchantsDone += times;
             const boostTxt = Object.keys(gained).map(k => `+${gained[k]} ${(attrNames[k] || k.toUpperCase())}`).join(', ');
-            log(`${item.name} encantado${times > 1 ? ` ${times}x` : ''}! ${boostTxt}.`, "var(--accent)");
+            log(`${item.name} encantado${times > 1 ? ` ${times}x` : ''}!${item.unique ? ' (✨ bónus de Item Único: +50%)' : ''} ${boostTxt}.`, "var(--accent)");
             sfxLoot();
             closeItemActions();
             updateUI();
@@ -340,3 +343,29 @@
     }
 
     function setInvSort(mode) { invSortMode = mode; updateUI(); }
+
+    // --- Vender por raridade (venda em lote) ---
+    // Itens Únicos nunca entram aqui (não têm rarityName das RARITIES normais, ou têm o campo
+    // "unique" true), nem consumíveis (não têm rarityName de todo) — só equipamento normal.
+    function toggleSellRarityFilter(rarityName, checked) {
+        if (checked) sellRarityFilter.add(rarityName); else sellRarityFilter.delete(rarityName);
+        updateUI();
+    }
+    function getSellByRarityPreview() {
+        let count = 0, gold = 0;
+        p.inv.forEach(it => {
+            if (it.rarityName && !it.unique && sellRarityFilter.has(it.rarityName)) { count++; gold += getSellPrice(it); }
+        });
+        return { count, gold };
+    }
+    function sellByRarity() {
+        const { count, gold } = getSellByRarityPreview();
+        if (count === 0) { log("Escolhe pelo menos uma raridade com itens na mochila.", "var(--btn-red)"); return; }
+        showConfirm(`Vender ${count} item(ns) por ${gold} Ouro?`, () => {
+            p.inv = p.inv.filter(it => !(it.rarityName && !it.unique && sellRarityFilter.has(it.rarityName)));
+            p.gold += gold;
+            log(`Vendeste ${count} item(ns) por ${gold} Ouro.`, "var(--accent)");
+            sfxClick();
+            updateUI();
+        });
+    }
