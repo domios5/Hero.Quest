@@ -1,4 +1,4 @@
-const CACHE_NAME = 'hero-quest-v28';
+const CACHE_NAME = 'hero-quest-v30';
 const CACHE_FILES = [
   'index.html',
   'manifest.json',
@@ -43,7 +43,44 @@ const CACHE_FILES = [
   'img/anel_borgia.jpg',
   'img/capa_sombras.jpg',
   'img/veu_morgana.jpg',
-  'img/estandarte_dragao.jpg'
+  'img/estandarte_dragao.jpg',
+  'img/anel_do_um.jpg',
+  'img/calice_circe.jpg',
+  'img/pedra_filosofal.jpg',
+  'img/espada_longa.jpg',
+  'img/machado_guerra.jpg',
+  'img/martelo_guerra.jpg',
+  'img/adaga.jpg',
+  'img/punhal_gemeo.jpg',
+  'img/lamina_curva.jpg',
+  'img/cajado.jpg',
+  'img/grimorio.jpg',
+  'img/varinha_runica.jpg',
+  'img/placas.jpg',
+  'img/armadura_ferro.jpg',
+  'img/couraca_reforcada.jpg',
+  'img/couro.jpg',
+  'img/armadura_couro_cravejado.jpg',
+  'img/manto_reforcado.jpg',
+  'img/tunica.jpg',
+  'img/robe_arcano.jpg',
+  'img/manto_sabio.jpg',
+  'img/colar_normal.jpg',
+  'img/pingente_antigo.jpg',
+  'img/berlinde_encantado.jpg',
+  'img/medalhao_runico.jpg',
+  'img/anel_normal.jpg',
+  'img/alianca_runica.jpg',
+  'img/anel_selado.jpg',
+  'img/anel_gravado.jpg',
+  'img/botas_normais.jpg',
+  'img/botas_couro.jpg',
+  'img/sapatos_elficos.jpg',
+  'img/botas_viagem.jpg',
+  'img/capa_normal.jpg',
+  'img/manto_curto.jpg',
+  'img/capuz_sombrio.jpg',
+  'img/capa_enfarrapada.jpg'
 ];
 
 self.addEventListener('install', (e) => {

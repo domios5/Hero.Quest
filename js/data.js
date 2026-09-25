@@ -73,7 +73,54 @@
         anel_borgia: 'img/anel_borgia.jpg',
         capa_sombras: 'img/capa_sombras.jpg',
         veu_morgana: 'img/veu_morgana.jpg',
-        estandarte_dragao: 'img/estandarte_dragao.jpg'
+        estandarte_dragao: 'img/estandarte_dragao.jpg',
+        anel_do_um: 'img/anel_do_um.jpg',
+        calice_circe: 'img/calice_circe.jpg',
+        pedra_filosofal: 'img/pedra_filosofal.jpg'
+    };
+    // Imagem de cada item normal (não-único), indexada pelo nome exato usado em
+    // itemNamesByClass/itemNamesGeneric. Mesma lógica: se não existir, simplesmente não mostra imagem.
+    const GENERIC_ITEM_IMAGES = {
+        // Armas
+        'Espada Longa': 'img/espada_longa.jpg',
+        'Machado de Guerra': 'img/machado_guerra.jpg',
+        'Martelo de Guerra': 'img/martelo_guerra.jpg',
+        'Adaga': 'img/adaga.jpg',
+        'Punhal Gémeo': 'img/punhal_gemeo.jpg',
+        'Lâmina Curva': 'img/lamina_curva.jpg',
+        'Cajado': 'img/cajado.jpg',
+        'Grimório': 'img/grimorio.jpg',
+        'Varinha Rúnica': 'img/varinha_runica.jpg',
+        // Armaduras
+        'Placas': 'img/placas.jpg',
+        'Armadura de Ferro': 'img/armadura_ferro.jpg',
+        'Couraça Reforçada': 'img/couraca_reforcada.jpg',
+        'Couro': 'img/couro.jpg',
+        'Armadura de Couro Cravejado': 'img/armadura_couro_cravejado.jpg',
+        'Manto Reforçado': 'img/manto_reforcado.jpg',
+        'Túnica': 'img/tunica.jpg',
+        'Robe Arcano': 'img/robe_arcano.jpg',
+        'Manto do Sábio': 'img/manto_sabio.jpg',
+        // Colares
+        'Colar': 'img/colar_normal.jpg',
+        'Pingente Antigo': 'img/pingente_antigo.jpg',
+        'Berlinde Encantado': 'img/berlinde_encantado.jpg',
+        'Medalhão Rúnico': 'img/medalhao_runico.jpg',
+        // Anéis
+        'Anel': 'img/anel_normal.jpg',
+        'Aliança Rúnica': 'img/alianca_runica.jpg',
+        'Anel Selado': 'img/anel_selado.jpg',
+        'Anel Gravado': 'img/anel_gravado.jpg',
+        // Botas
+        'Botas': 'img/botas_normais.jpg',
+        'Botas de Couro': 'img/botas_couro.jpg',
+        'Sapatos Élficos': 'img/sapatos_elficos.jpg',
+        'Botas de Viagem': 'img/botas_viagem.jpg',
+        // Capas
+        'Capa': 'img/capa_normal.jpg',
+        'Manto Curto': 'img/manto_curto.jpg',
+        'Capuz Sombrio': 'img/capuz_sombrio.jpg',
+        'Capa Esfarrapada': 'img/capa_enfarrapada.jpg'
     };
 
     const ABILITIES = {

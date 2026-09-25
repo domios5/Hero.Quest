@@ -133,7 +133,9 @@
                 for (let b in item.bonuses) bTxt += `+${item.bonuses[b]}${b.toUpperCase()} `;
                 const uniqueTag = item.unique ? '✨ ' : '';
                 const runeIcons = (item.runes || []).map(r => r ? `${RUNES[r.type].icon}+${r.level}` : '').filter(Boolean).join(' ');
-                el.innerHTML = `<span style="color:${item.rarityColor}">${uniqueTag}${item.name}</span><br><small>${bTxt}</small>${runeIcons ? `<br><small style="color:#ffd700;">${runeIcons}</small>` : ''}`;
+                const eqImgSrc = item.unique ? UNIQUE_ITEM_IMAGES[item.uniqueId] : GENERIC_ITEM_IMAGES[item.name];
+                const eqImgHtml = eqImgSrc ? `<img src="${eqImgSrc}" alt="" style="width:22px; height:22px; vertical-align:middle; border-radius:3px; margin-right:3px;" onerror="this.remove()">` : '';
+                el.innerHTML = `<span style="color:${item.rarityColor}">${eqImgHtml}${uniqueTag}${item.name}</span><br><small>${bTxt}</small>${runeIcons ? `<br><small style="color:#ffd700;">${runeIcons}</small>` : ''}`;
                 if (slotEl) { slotEl.title = buildItemTooltip(item); slotEl.classList.toggle('unique-item', !!item.unique); }
             } else {
                 el.innerText = "Vazio";
@@ -217,7 +219,9 @@
                 let bTxt = "";
                 if (item.bonuses) for (let b in item.bonuses) bTxt += `+${item.bonuses[b]} `;
                 const uniqueTag = item.unique ? '✨ ' : '';
-                s.innerHTML = `<b style="color:${item.rarityColor || '#fff'}">${uniqueTag}${item.name}</b><br><small>${bTxt}</small>`;
+                const invImgSrc = item.unique ? UNIQUE_ITEM_IMAGES[item.uniqueId] : GENERIC_ITEM_IMAGES[item.name];
+                const invImgHtml = invImgSrc ? `<img src="${invImgSrc}" alt="" style="width:24px; height:24px; border-radius:3px; margin-bottom:2px;" onerror="this.remove()">` : '';
+                s.innerHTML = `${invImgHtml}<b style="color:${item.rarityColor || '#fff'}">${uniqueTag}${item.name}</b><br><small>${bTxt}</small>`;
                 s.title = buildItemTooltip(item);
                 s.onclick = () => showActions(item, realIdx);
                 if (item.unique) s.classList.add('unique-item');
@@ -317,8 +321,10 @@
             for (let b in item.bonuses) bTxt += `+${item.bonuses[b]}${b.toUpperCase()} `;
             const shopPrice = getShopPrice(item.price);
             const priceTxt = shopPrice < item.price ? `<s style="color:#888;">${item.price}</s> ${shopPrice} G` : `${item.price} G`;
+            const shopImgSrc = GENERIC_ITEM_IMAGES[item.name];
+            const shopImgHtml = shopImgSrc ? `<img src="${shopImgSrc}" alt="" style="width:32px; height:32px; vertical-align:middle; border-radius:4px; margin-right:5px;" onerror="this.remove()">` : '';
             const div = document.createElement('div'); div.className = 'item-card';
-            div.innerHTML = `<b style="color:${item.rarityColor}">${item.name}</b> (${item.rarityName})<br><small>${bTxt}</small>
+            div.innerHTML = `${shopImgHtml}<b style="color:${item.rarityColor}">${item.name}</b> (${item.rarityName})<br><small>${bTxt}</small>
                             <button onclick="buyItem(${i})">Comprar (${priceTxt})</button>`;
             sD.appendChild(div);
         });
@@ -434,9 +440,11 @@
             ? `<br><small style="color:#ffd700;">⚡ ${uniqueDef.abilityDesc}</small>` : '';
         const uniqueImgSrc = item.unique ? UNIQUE_ITEM_IMAGES[item.uniqueId] : null;
         const uniqueImgHtml = uniqueImgSrc ? `<img src="${uniqueImgSrc}" alt="${item.name}" style="max-width:140px; max-height:140px; display:block; margin:0 auto 8px auto; border-radius:6px;" onerror="this.remove()">` : '';
+        const genericImgSrc = !item.unique ? GENERIC_ITEM_IMAGES[item.name] : null;
+        const genericImgHtml = genericImgSrc ? `<img src="${genericImgSrc}" alt="${item.name}" style="max-width:120px; max-height:120px; display:block; margin:0 auto 8px auto; border-radius:6px;" onerror="this.remove()">` : '';
         document.getElementById('action-info').innerHTML = item.unique
             ? `${uniqueImgHtml}<b style="color:${item.rarityColor};">✨ ${item.name}</b><br><small style="color:#ccc; font-style:italic;">"${item.lore}"</small>${abilityHtml}`
-            : `<b>${item.name}</b>`;
+            : `${genericImgHtml}<b>${item.name}</b>`;
         const btn = document.getElementById('btn-equip-use');
         const enchantBtn = document.getElementById('btn-enchant');
         // Itens Únicos exclusivos de outra classe nunca podem ser equipados (podem acontecer de
